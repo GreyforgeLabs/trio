@@ -1013,6 +1013,36 @@
       "tests": [
         "python -m unittest discover -s tests -v"
       ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/COMMAND_REFERENCE.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "Documentation checked against the public parser/catalog and runnable local examples; scope status explicitly recorded in docs/PRODUCT_SCOPE.md.",
+      "adaptation": "User-facing documentation for existing commands; no private source or runtime records.",
+      "tests": [
+        "Documentation link, command syntax, catalog coverage, JSON schema and offline workflow checks."
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/FEATURES.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "Documentation checked against the public parser/catalog and runnable local examples; scope status explicitly recorded in docs/PRODUCT_SCOPE.md.",
+      "adaptation": "User-facing documentation for existing commands; no private source or runtime records.",
+      "tests": [
+        "Documentation link, command syntax, catalog coverage, JSON schema and offline workflow checks."
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/GETTING_STARTED.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "Documentation checked against the public parser/catalog and runnable local examples; scope status explicitly recorded in docs/PRODUCT_SCOPE.md.",
+      "adaptation": "User-facing documentation for existing commands; no private source or runtime records.",
+      "tests": [
+        "Documentation link, command syntax, catalog coverage, JSON schema and offline workflow checks."
+      ]
     }
   ],
   "rights_review": "Exact independent review recorded in release attestation; source metadata does not grant approval",

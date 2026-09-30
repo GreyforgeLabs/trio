@@ -1,14 +1,18 @@
 # Public contribution workflow
 
-The `contribution` command family takes an issue or a local finding through
-public source acquisition, patch validation, exact publication approval and
-pull request publication. `trio commands --json` provides the versioned machine
+[Documentation home](../README.md) · [Getting started](GETTING_STARTED.md) ·
+[Command reference](COMMAND_REFERENCE.md)
+
+The `contribution` command family takes a public issue through source
+acquisition, patch validation, exact publication approval and pull request
+publication. The local-finding intake option currently has a ledger
+compatibility mismatch; see [known limits](#limitations-to-inspect-before-choosing-this-workflow). `trio commands --json` provides the versioned machine
 catalog. There is no built-in model or automatic agent launcher; a person or
 separately chosen tool supplies the patch and proposed PR text.
 
 ## Prepare and validate
 
-Intake selects a public GitHub repository and issue or records a local finding.
+Use issue intake to select a public GitHub repository and issue.
 Acquire resolves a precise base commit and obtains a complete public source tree.
 Acquire and refresh have an explicit `--request-budget` (default 1000) covering
 bounded Git object reads; an exhausted budget cannot produce a valid source seal.
@@ -100,3 +104,102 @@ or assistant byline.
 Refresh reacquires the explicitly selected base and reapplies the saved patch;
 resolve conflicts before revalidation. Revise requires a managed prior PR and
 creates a fresh exact plan. Both workflows need a new validation seal and approval.
+
+## Before the walkthrough
+
+You need initialized state, a read/write credential chosen by environment
+variable name, Podman, and an image already installed locally and selected by
+full `@sha256:` digest. The image must contain the project's required tools and
+dependencies: validation has no network and does not pull or install them.
+Use an existing public issue for the current walkthrough.
+
+A full Git commit SHA is required for `--base`. It must match the selected
+`--base-branch` when planning publication. Contribution commands acquire source
+through GitHub APIs; they do not use your working directory as the source.
+`change.patch` is a constrained unified text patch against that exact base,
+and `pr-body.md` is the UTF-8 file containing the exact proposed PR body.
+
+## Keep the IDs straight
+
+| Placeholder | Obtain it from | Commands using it |
+|---|---|---|
+| `CONTRIBUTION_ID` | Intake result's `id` | show, acquire, patch, validate, plan, revise, refresh |
+| `PUBLICATION_PLAN_ID` | Plan/revise result's `id` | inspect, approve, publish, reconcile |
+| `PLAN_DIGEST` | Plan/revise result's `digest` | approve |
+| `BASE_SHA` | Verified current commit for the selected upstream base branch | acquire, refresh |
+| `APPROVED_IMAGE_DIGEST` | Preinstalled image identity explicitly permitted by local policy | validate |
+
+The contribution ID and plan ID are different. Validation binds the contribution
+source; approval binds the publication plan. Editing a patch or changing the
+base invalidates the old validation/approval chain.
+
+## Set up contribution policy
+
+Use the [operations policy guide](OPERATIONS_GUIDE.md#configure-a-local-policy).
+For a fork contribution, its repository entry additionally needs:
+
+```json
+{
+  "repository_id": 456,
+  "actions": ["contribution-publish"],
+  "mode": "fork",
+  "fork_owner": "YOUR_LOGIN"
+}
+```
+
+Replace that synthetic repository ID and owner with verified values. The full
+policy needs `publication_enabled: true`, the authenticated `identity_id`,
+`contents:write` and `pull_requests:write` declarations, an approved digest in
+`sandbox_images`, and local `approver`/`publisher` actors. Leave maintenance
+disabled unless you separately intend to use it. Direct publication uses
+`mode: "direct"` and requires live access to the upstream repository.
+
+Plan creation itself checks the publication gate and seal. Configure the exact
+reviewed policy before planning; a later policy change invalidates approval.
+No gate or local role can grant GitHub permission or make a private source public.
+
+## Walkthrough and expected results
+
+Follow the command examples above with your own values:
+
+1. **Intake:** returns a contribution `id`, selected repository/identity, and
+   queued stage. `contribution list` and `show` inspect local records.
+2. **Acquire:** returns verified source at the exact base, under the explicit
+   request budget. Partial or unsupported source cannot produce a seal.
+3. **Patch:** applies the selected text patch to contained files; unrelated
+   tracked source is retained.
+4. **Validate:** runs the explicitly selected argv arrays in an offline
+   container and records results. Success creates a host-issued seal; failure
+   invalidates a previous seal. Use `--timeout`, `--memory-mb`, `--pids`, and
+   `--cpus` for limits appropriate to the project.
+5. **Plan:** returns a separate plan `id` and `digest`, exact commit/tree,
+   destination, branch, title, body, author, base, and seal binding.
+6. **Inspect:** read the complete `plan` with a sufficiently large response
+   budget, for example `--max-bytes 65536`.
+7. **Approve:** use the plan ID/digest and an actor with `approver` capability.
+   The earlier generic examples use `operator`; with the guide's two-role
+   policy use `--actor reviewer` for approve and `--actor operator` for publish.
+8. **Publish:** uses the plan ID and publisher capability. Inspect the journal;
+   an accepted asynchronous fork or uncertain request is not completion.
+9. **Reconcile:** uses reads against the same plan ID to establish which exact
+   effects exist. It does not blindly replay a timed-out write.
+
+For a revision, patch and validate the managed contribution again, then use
+`contribution revise` with a new branch/title/body/author declaration as required
+by its command help. It creates a fresh publication plan. For a changed upstream
+base, `refresh` reacquires that base and reapplies the saved patch; conflicts
+must be resolved before a new validation and plan. Never force-update an
+unrelated branch to make a plan pass.
+
+## Limitations to inspect before choosing this workflow
+
+The current source acquisition refuses symlinks, submodules, LFS pointers,
+truncated trees, and unsupported entries. Patch import refuses binary patches,
+unsafe paths, renames, and unsupported mode changes. These are explicit source
+format limits, not claims about the quality of an upstream project.
+
+`--finding` is exposed for local finding intake. The current bridge expects
+an older finding detail shape and can refuse a finding from the current ledger
+with `CONFLICT`; use real issue intake until that compatibility is corrected.
+Do not substitute an invented issue number. Live maintenance/contribution writes
+remain unqualified in a live trial; release sandbox/read verification is separate.

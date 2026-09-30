@@ -1,5 +1,12 @@
 # GitHub inventory and maintenance
 
+[Documentation home](../README.md) · [Getting started](GETTING_STARTED.md) ·
+[Command reference](COMMAND_REFERENCE.md)
+
+Use this guide to inspect repositories and plan maintainer actions. Every
+uppercase ID below is a placeholder for a value returned by your own command.
+Account inventory snapshots and public evidence snapshots are different things.
+
 Start with `trio commands --json` for the exact arguments and effects of the
 `inventory` and `ops` command families. Initialize a state directory outside the
 source tree. Read-only local lists and plan inspection never resolve credentials.
@@ -22,6 +29,27 @@ fine-grained personal access tokens do not support those endpoints. A denied
 notification fetch leaves an explicitly incomplete collection. Choose the least
 privilege credential that supports the operations you actually need.
 [Official notification API](https://docs.github.com/en/rest/activity/notifications)
+
+### Inventory selections and limits
+
+```bash
+trio --home "$TRIO_STATE" inventory sync --organization YOUR_ORG --repository-limit 100 --item-limit 1000 --request-budget 100 --token-env TRIO_GITHUB_TOKEN --json
+trio --home "$TRIO_STATE" inventory list --snapshot SNAPSHOT_ID --kind notifications --limit 20 --json
+trio --home "$TRIO_STATE" inventory list --snapshot SNAPSHOT_ID --kind workflow_runs --repository OWNER/REPO --limit 20 --json
+trio --home "$TRIO_STATE" inventory show --snapshot SNAPSHOT_ID --repository OWNER/REPO --json
+trio --home "$TRIO_STATE" inventory drift --before OLD_SNAPSHOT_ID --after NEW_SNAPSHOT_ID --json
+```
+
+Use `next_cursor` from a list as `--cursor` to continue. Per-repository kinds
+(`pulls`, `issues`, `workflow_runs`, `releases`) require a repository selection.
+Repository, fork, and notification lists are snapshot-level selections.
+`--repository-limit` accepts 1–1,000; `--item-limit` and `--request-budget`
+accept 1–10,000. These limits bound acquisition, not GitHub permission.
+Notifications for an organization are filtered to its observed repositories;
+partial repository acquisition also makes that notification scope partial.
+Drift needs the same account identity and scope. An incomplete comparison does
+not claim an item was deleted. Inventory contains observations of releases;
+there is no release creation/upload command.
 
 ## Maintenance
 
@@ -91,3 +119,104 @@ The default command catalog is a bounded summary. Select a quoted full command
 with `--command` for its complete argument declaration. Increase `--max-bytes`
 when you need to inspect an unusually long exact plan; a truncated summary is
 not a substitute for reviewing its full intent.
+
+## Configure a local policy
+
+Trio uses two different configurations: evidence/review roles live in state
+`config.json`; maintenance/publication roles live in `operations/policy.json`.
+Use the CLI to inspect/install an explicitly reviewed operations policy.
+`ops policy --path` replaces the policy, rather than merging it.
+
+This example is **closed** and contains synthetic IDs. Save it as
+`reviewed-policy.json` outside the software checkout:
+
+```json
+{
+  "schema": "trio.operations-policy/v1",
+  "revision": "1",
+  "identity_id": 123,
+  "maintenance_enabled": false,
+  "publication_enabled": false,
+  "notifications_enabled": false,
+  "actors": {
+    "reviewer": ["approver"],
+    "operator": ["publisher"]
+  },
+  "repositories": {
+    "example/project": {
+      "repository_id": 456,
+      "actions": ["issue-comment"]
+    }
+  },
+  "permissions": ["issues:write"],
+  "sandbox_images": []
+}
+```
+
+```bash
+trio --home "$TRIO_STATE" ops policy --json
+trio --home "$TRIO_STATE" ops policy --path reviewed-policy.json --json
+```
+
+Replace `identity_id` with your credential's authenticated GitHub account ID,
+and the repository name/ID with its verified identity. Inventory sync returns
+`identity`; inventory show returns the selected repository's `id`. To authorize
+maintenance in your installation, deliberately set `maintenance_enabled` to
+true and allow only the intended actions/permissions. Notification operations
+also need `notifications_enabled`. Configuration is a local declaration; your
+actual credential must still have the necessary GitHub access.
+
+When changing a policy, change its revision string and prepare/review new plans.
+Changing policy contents invalidates old approval even if the revision label
+stays the same. Separate local approver and publisher names make their roles
+clear, but filesystem access can change policy; they are cooperative controls.
+Do not store a GitHub token in this JSON.
+
+## The nine maintenance operations
+
+| `--operation` | Target arguments | Extra input | Declared permission |
+|---|---|---|---|
+| `notification-ack` | `--repository`, `--thread` | Exact selected notification thread | `notifications:write` |
+| `issue-label` | `--repository`, `--number` | `--labels labels.json`, an array of strings replacing the label set | `issues:write` |
+| `issue-comment` | `--repository`, `--number` | `--text 'Reviewed explanation'` | `issues:write` |
+| `issue-close` | `--repository`, `--number` | None | `issues:write` |
+| `issue-reopen` | `--repository`, `--number` | None | `issues:write` |
+| `pr-ready` | `--repository`, `--number` | PR must be a draft | `pull_requests:write` |
+| `pr-close` | `--repository`, `--number` | Current PR state is checked | `pull_requests:write` |
+| `pr-update-branch` | `--repository`, `--number` | Approved head SHA is sent to GitHub | `contents:write` |
+| `pr-merge` | `--repository`, `--number` | `--merge-method merge`, `squash`, or `rebase`; approved head SHA is sent | `contents:write` |
+
+These strings declare local policy intent, not token scopes automatically
+granted by Trio. Labels replace the complete intended label set; they do not
+append automatically. Branch update can return `pending`, requiring observation
+before reporting success. A merge request does not delete the branch.
+
+## Maintainer walkthrough: comment on an issue
+
+Use a real repository and issue selected from your inventory/evidence. The
+example does not open the local policy gate for you.
+
+```bash
+trio --home "$TRIO_STATE" ops plan --operation issue-comment --repository OWNER/REPO --number 42 --text 'Reviewed explanation' --token-env TRIO_GITHUB_TOKEN --json
+trio --home "$TRIO_STATE" ops inspect --id PLAN_ID --max-bytes 65536 --json
+trio --home "$TRIO_STATE" ops approve --id PLAN_ID --digest PLAN_DIGEST --actor reviewer --json
+trio --home "$TRIO_STATE" ops execute --id PLAN_ID --actor operator --token-env TRIO_GITHUB_TOKEN --json
+trio --home "$TRIO_STATE" ops inspect --id PLAN_ID --json
+```
+
+Copy `id` and `digest` from the plan. Inspect the full target, text, expected
+state, and policy before approval. The approval receipt is not the plan itself.
+Execution uses the original plan ID and records `successful`, `pending`,
+`failed`, or `uncertain` outcomes. If the target, identity, head, or policy
+changes, prepare a fresh plan instead of trying to reuse old approval.
+
+For an uncertain or pending result, inspect the same record and reconcile by
+reading GitHub:
+
+```bash
+trio --home "$TRIO_STATE" ops reconcile --id PLAN_ID --token-env TRIO_GITHUB_TOKEN --json
+```
+
+Reconciliation may confirm an observed state without proving which actor caused
+it. Do not resend a possibly completed write merely because a request timed out.
+See [recovery](RECOVERY.md) for the durable-record workflow.

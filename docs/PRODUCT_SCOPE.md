@@ -1,5 +1,19 @@
 # Trio public GitHub operations
 
+## Intended integration and current status
+
+The operator's intended scope is to integrate the selected upstream repository
+capabilities into the existing ForgeHub architecture, then distribute the
+result publicly as Trio. The target is one shared codebase.
+
+Current v0.2.0 is still a separate implementation. Upstream components were
+incorporated into Trio, while integration into the existing ForgeHub codebase
+is unfinished. The functional contract below describes the current public
+commands; it does not certify that architecture integration or a drop-in
+ForgeHub migration has been completed. See the [feature guide](FEATURES.md)
+for supported behavior and current boundaries.
+
+
 Trio is a public, installable GitHub operations toolkit for people and their
 agents. Its purpose is to manage repositories and prepare and publish public
 contributions. Evidence search and collaborative review support those workflows.

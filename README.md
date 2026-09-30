@@ -1,41 +1,88 @@
 # Trio
 
-Trio is a local GitHub operations toolkit for people and their agents. It brings
-repository inventory, maintenance and public contribution workflows into one
-CLI, with evidence search and collaborative triage to support decisions.
+Trio is intended to be the public-facing distribution of ForgeHub, enhanced
+with the selected upstream repositories. The goal is one shared codebase for
+contributors, maintainers, reviewers, and their agents.
 
-- Synchronize an account or organization and inspect repositories, forks, pull
-  requests, issues, notifications, workflow runs, releases and snapshot drift.
-- Preview, approve and execute repository maintenance through GitHub: issue
-  comments, labels and state; pull request readiness, branch updates, closure
-  and merges; selected notification acknowledgments.
-- Prepare public contributions from an issue or finding, acquire exact public
-  source, apply a patch, validate it in a sandbox, and publish the reviewed
-  changes through a direct branch or managed fork and pull request.
-- Search captured public evidence with citations, exchange proposals and reviews,
-  and retain operation records for recovery after uncertain writes.
+**Current status:** the published v0.2.0 implementation is still separate from
+ForgeHub. The upstream components were integrated into Trio; integration into
+the existing ForgeHub codebase remains unfinished. This documentation describes
+the commands that work in the current public implementation. ForgeHub commands,
+settings, and databases are not interchangeable with Trio's.
 
-Python 3.12+ and SQLite FTS5 are required. Core Python code has no mandatory
-third-party dependencies. Sandbox validation requires an installed Podman and
-an explicitly selected, preinstalled container image pinned by digest. Install
-with `pip install .`, initialize local state with `trio --home STATE init --json`,
-and inspect `trio commands --json` for commands, arguments and effects.
+## Start here
 
-See [GitHub operations](docs/OPERATIONS_GUIDE.md),
-[public contribution workflow](docs/CONTRIBUTIONS.md), and
-[evidence and team guide](docs/USER_GUIDE.md). The
-[product scope](docs/PRODUCT_SCOPE.md) defines the public functional contract.
+- **New user:** [Getting started](docs/GETTING_STARTED.md) covers installation,
+  a first run without GitHub credentials, and your first repository inventory.
+- **Contributor:** [Contribution walkthrough](docs/CONTRIBUTIONS.md) takes a
+  public issue through a patch, sandbox validation, review, and PR publication.
+- **Maintainer:** [Repository operations](docs/OPERATIONS_GUIDE.md) covers
+  inventory, notifications, issue management, PR actions, and recovery.
+- **Reviewer or team:** [Evidence and team guide](docs/USER_GUIDE.md) covers
+  capture, search, findings, review, groups, bundles, and evidence packets.
+- **Looking for a feature:** [Feature guide](docs/FEATURES.md) explains every
+  feature area. [Command reference](docs/COMMAND_REFERENCE.md) lists all
+  62 commands, their arguments, defaults, and effects.
 
-Write policies default closed. Every write requires an exact local plan and
-approval, enabled repository/action policy, and fresh GitHub checks. Validation
-and imported reviews do not authorize publication. Tokens stay transient; local
-account inventory and journals belong outside the software repository.
+## What you can do today
 
-Version 0.2.0 corrects the narrow evidence-only scope of v0.1.0. Live GitHub
-mutation verification is **NOT_RUN**; offline API and sandbox qualification are
-reported separately in the release. The preserved v0.1.0 tag remains available.
+| Your task | Tools |
+|---|---|
+| Inspect an account or organization | Repository/fork inventory, open PRs and issues, notifications, workflow runs, releases, snapshot comparisons |
+| Maintain a repository | Issue labels/comments/close/reopen; PR ready/close/update/merge; acknowledge one notification thread |
+| Contribute a fix | Public issue intake, verified source acquisition, patch application, offline sandbox validation, direct or fork PR publication |
+| Investigate related work | Capture public evidence, search an index, retrieve cited source, suggest related items |
+| Review together | Versioned findings, exact-digest reviews, work groups, portable event bundles, explicit conflict resolution |
+| Recover after interruption | Inspect durable records and reconcile uncertain GitHub writes through reads |
 
-Public source and releases: https://github.com/GreyforgeLabs/trio. The CLI is
-`trio`, import package `trio_triage`, and distribution `trio-triage`, avoiding the
-unrelated asynchronous Python Trio package. Package-registry publication is not
-part of this release.
+## Install and try it
+
+Python 3.12 or newer and SQLite with FTS5 support are required. Linux is the
+reference environment. Podman and a preinstalled image selected by digest are
+needed for contribution validation. Core installation has no mandatory Python
+runtime dependencies. Git is used below to obtain the source.
+
+```bash
+git clone https://github.com/GreyforgeLabs/trio.git
+cd trio
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install .
+
+export TRIO_STATE="$HOME/.local/state/trio-example"
+trio --home "$TRIO_STATE" init --json
+trio --home "$TRIO_STATE" doctor --json
+trio commands --json
+```
+
+Choose a new state directory for the first `init`. An existing installation
+uses `status` or `doctor` instead. The [quickstart](docs/GETTING_STARTED.md)
+explains expected output, configuration, and the next commands.
+
+## Before writing to GitHub
+
+Inventory and evidence capture read GitHub. Maintenance and contribution
+publication need a separately configured local policy, exact plan approval,
+and fresh GitHub checks. They start disabled. The [operations guide](docs/OPERATIONS_GUIDE.md)
+explains the policy fields and approval flow. Local actor names do not
+authenticate people or grant GitHub permissions.
+
+Live maintenance and contribution writes have **not been validated in a live
+trial**. The release records offline tests, actual sandbox validation, and
+production public read verification separately. The older `action` family
+remains experimental. Release creation/upload, automatic agents, and a hosted
+web interface are not implemented; see [feature boundaries](docs/FEATURES.md#current-boundaries).
+
+## More documentation
+
+[Scope and integration status](docs/PRODUCT_SCOPE.md) ·
+[Recovery](docs/RECOVERY.md) · [Security](SECURITY.md) ·
+[Contributing to the code](CONTRIBUTING.md) ·
+[Dependencies](docs/DEPENDENCIES.md) ·
+[Upstream notices](THIRD_PARTY_NOTICES.md) ·
+[Release verification](docs/PUBLICATION.md)
+
+The command is `trio`, the Python import is `trio_triage`, and the distribution
+is `trio-triage`. This project is separate from the asynchronous Python package
+named Trio. Install from this source or its release artifacts; package-registry
+publication is not part of this release. Contact: contact@greyforge.tech.
