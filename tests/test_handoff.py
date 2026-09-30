@@ -10,7 +10,8 @@ from trio_triage import contracts as c
 from trio_triage.cli import parser
 from trio_triage.errors import TrioError
 from trio_triage.evidence.service import EvidenceService
-from trio_triage.handoff import HandoffService, ENVELOPE, TRANCHE_BLOB, TRANCHE_COMMIT, sealed, validate_envelope
+from trio_triage.handoff import (HandoffService, ENVELOPE, PROVIDER_ENVELOPE, JUDGMENT_NAMES,
+    TRANCHE_BLOB, TRANCHE_COMMIT, TRANCHE_PROVIDER_BLOB, TRANCHE_PROVIDER_TREE, sealed, validate_envelope)
 from trio_triage.storage import Store, atomic_json, digest, read_json
 from trio_triage.team import TeamService
 from trio_triage import tranche_export as producer
@@ -40,6 +41,22 @@ def envelope():
         "batch": {"id": "B001", "members": [1, 2], "source_digest": "d" * 64}, "items": items,
         "relationships": {"confirmed_groups": [], "review_groups": [], "uncertain_pairs": [{"a": 1, "b": 2, "classification": "uncertain"}],
                           "meaning": "Unverified suggestions; no approval"}})
+
+
+def provider_envelope():
+    value = envelope()
+    value.pop("digest")
+    value["schema"] = PROVIDER_ENVELOPE
+    value["source"].pop("tool_commit")
+    value["source"].update(tool_base_commit=TRANCHE_COMMIT, tool_tree=TRANCHE_PROVIDER_TREE,
+                           tool_blob=TRANCHE_PROVIDER_BLOB)
+    descriptor = {"adapter": "json-results/v1", "provider_id": "synthetic/router", "model": "fixture-v1",
+                  "settings": {"revision": "one"}, "capabilities": {"judge": ["category"], "pair": []}}
+    answers = {name: {"status": "unsupported"} for name in JUDGMENT_NAMES}
+    answers["category"] = {"status": "abstain", "reason": "Insufficient synthetic evidence", "choice": None}
+    value["provider"] = {"descriptor": descriptor, "fingerprint": digest(descriptor), "pairs": [],
+                         "judgments": [{"number": 1, "binding": "e" * 64, "answers": answers, "resolved_model": "fixture-v1"}]}
+    return sealed(value)
 
 
 class ReadFixture:
@@ -116,6 +133,40 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(replay["requests"], 0)
         self.assertEqual(self.reader.calls, before)
         self.assertEqual(len(TeamService(self.store).events()), 1)
+
+    def test_provider_claims_and_abstentions_remain_unverified_in_draft_group(self):
+        value = provider_envelope()
+        result = self.service.run(self.prepare(value)["id"], self.reader)
+        self.assertTrue(result["complete"], result.get("error"))
+        self.assertEqual(result["envelope"]["provider"], value["provider"])
+        events = TeamService(self.store).events()
+        self.assertEqual([event["operation"] for event in events], ["group"])
+        self.assertEqual(events[0]["payload"]["status"], "draft")
+        self.assertFalse(self.store.config["writes_enabled"])
+        self.assertTrue(result["evidence_refs"])
+
+    def test_provider_contract_refuses_mixed_pin_fingerprint_and_member_records(self):
+        mutations = (
+            lambda v: v["source"].update(tool_blob=TRANCHE_BLOB),
+            lambda v: v["source"].update(tool_tree="f" * 40),
+            lambda v: v["provider"]["descriptor"]["settings"].update(revision="different"),
+            lambda v: v["provider"]["judgments"][0].update(number=99),
+            lambda v: v["provider"]["judgments"].append(copy.deepcopy(v["provider"]["judgments"][0])),
+            lambda v: v["provider"]["descriptor"]["capabilities"].update(pair=["unknown-question"]),
+            lambda v: v.update(schema=ENVELOPE),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                value = provider_envelope()
+                mutation(value)
+                value = sealed({k: v for k, v in value.items() if k != "digest"})
+                with self.assertRaises(TrioError):
+                    self.prepare(value)
+        self.assertFalse(self.reader.calls)
+        self.assertFalse(TeamService(self.store).events())
+
+    def test_legacy_and_provider_contracts_have_distinct_repeat_identities(self):
+        self.assertNotEqual(self.prepare(envelope())["id"], self.prepare(provider_envelope())["id"])
 
     def test_budget_exhaustion_retains_progress_and_explicit_resume(self):
         identifier = self.prepare()["id"]
@@ -312,6 +363,7 @@ class ProducerTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
         class API:
+            _trio_source_blob = TRANCHE_BLOB
             PAGES_DIR = root / "pages"
             OUT_DIR = root / "out"
             REPO = "example/project"
@@ -384,3 +436,121 @@ class ProducerTests(unittest.TestCase):
         with self.assertRaises(TrioError) as error:
             producer.export(self.api, "B001")
         self.assertEqual(error.exception.code, "HANDOFF_STALE")
+
+
+def check_installed_producer(source_root):
+    """Opt-in real-source compatibility qualification, entirely synthetic/offline.
+
+    The separately installed dependency must pass the production loader's hash
+    check. No dependency source, prompts or runtime data are bundled with Trio.
+    """
+    import argparse
+    import contextlib
+    import io
+    import json
+    api = producer.load_tranche(source_root)
+    modern = api._trio_source_blob == TRANCHE_PROVIDER_BLOB
+    results = []
+    for mode in (("jev", "category", "abstain") if modern else ("legacy",)):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            out, pages = root / "out", root / "pages"
+            with (patch.multiple(api, PAGES_DIR=pages, OUT_DIR=out, JUDGMENTS_PATH=out / "judgments.jsonl",
+                                 PAIRS_PATH=out / "pair_verdicts.jsonl", REPO="example/project"),
+                  patch("urllib.request.urlopen", side_effect=AssertionError("network forbidden")),
+                  contextlib.redirect_stdout(io.StringIO())):
+                rows = [raw_pr(1), raw_pr(2)]
+                atomic_json(pages / "snapshot.json", {"version": 1, "repo": api.REPO, "items": rows,
+                            "digest": digest(rows), "observed_at": STAMP})
+                args = argparse.Namespace(allow_unbound=False, provider_config=None, results=None,
+                                          model=None, resume=True, limit=None, max_pairs=100)
+                if mode == "jev":
+                    answers = {"category": {"choice": "docs"}, "risk": {"score": 1},
+                               "finished_form": {"score": 2}, "review_effort": {"score": 1},
+                               "is_fix": {"noul": 0.9}, "security_flag": {"noul": 0.1}, "dupe_signal": {"noul": 0}}
+                    with (patch.object(api, "read_key", return_value="synthetic-only") as key,
+                          patch.object(api, "ask", return_value={"answers": answers, "model": "synthetic-resolved", "usage": {}}) as model):
+                        api.cmd_judge(args)
+                        assert key.call_count == 1 and model.call_count == 2
+                elif mode in ("category", "abstain"):
+                    descriptor = {"adapter": "json-results/v1", "provider_id": "synthetic/router", "model": "fixture-v1",
+                        "settings": {"revision": "one"}, "capabilities": {"judge": ["category"],
+                        "pair": ["sameness"] if mode == "abstain" else []}}
+                    args.provider_config = root / "provider.json"
+                    args.results = root / "results.json"
+                    atomic_json(args.provider_config, {"format_version": 1, "provider": descriptor})
+                    selected = api.selected_provider(args)
+                    prs = api.load_prs()
+                    answer = ({"status": "abstain", "reason": "Insufficient synthetic evidence"} if mode == "abstain" else
+                              {"status": "answered", "choice": "docs"})
+                    records = [{"task": "judge", "binding": api.judgment_binding(pr, selected),
+                                "answers": {"category": answer}} for pr in prs.values()]
+                    if mode == "abstain":
+                        records.append({"task": "pair", "binding": api.pair_binding(prs, 1, 2, selected),
+                                        "answers": {"sameness": answer}})
+                    atomic_json(args.results, {"format_version": 1, "provider_fingerprint": selected.fingerprint,
+                                               "results": records})
+                    api.cmd_judge(args)
+                    api.cmd_dupes(args)
+                api.cmd_cluster(args)
+                api.cmd_batches(args)
+                value = producer.export(api, "B001")
+                assert value["schema"] == (PROVIDER_ENVELOPE if modern else ENVELOPE)
+                if modern:
+                    assert value["provider"]["fingerprint"] == digest(value["provider"]["descriptor"])
+                    if mode in ("category", "abstain"):
+                        assert all(record["answers"]["risk"]["score"] is None for record in value["provider"]["judgments"])
+                    if mode == "abstain":
+                        assert value["provider"]["pairs"][0]["status"] == "abstain"
+                        assert value["provider"]["pairs"][0]["reason"] == "Insufficient synthetic evidence"
+                        assert value["relationships"]["uncertain_pairs"][0]["classification"] == "uncertain"
+                        assert not value["relationships"]["confirmed_groups"]
+                    if mode == "jev":
+                        assert all(record["resolved_model"] == "synthetic-resolved" for record in value["provider"]["judgments"])
+                fixture = HandoffTests()
+                fixture.setUp()
+                try:
+                    plan = fixture.service.prepare(fixture.dataset, value, "bridge")
+                    final = fixture.service.run(plan["id"], fixture.reader)
+                    assert final["complete"], final.get("error")
+                    assert final["envelope"] == value
+                    assert len(final["evidence_refs"]) == 6
+                    assert all(fixture.evidence.resolve_ref(ref)["verified"] for ref in final["evidence_refs"])
+                    events = TeamService(fixture.store).events()
+                    assert len(events) == 1 and events[0]["payload"]["status"] == "draft"
+                    assert fixture.service.run(plan["id"], fixture.reader)["requests"] == 0
+                finally:
+                    fixture.doCleanups()
+                if mode == "category":
+                    # A changed config/descriptor cannot relabel an old report.
+                    saved = read_json(out / "summary.json")
+                    changed = copy.deepcopy(saved)
+                    changed["provider"]["settings"]["revision"] = "changed"
+                    changed["provider_fingerprint"] = digest(changed["provider"])
+                    atomic_json(out / "summary.json", changed)
+                    try:
+                        producer.export(api, "B001")
+                        raise AssertionError("stale provider configuration accepted")
+                    except TrioError as error:
+                        assert error.code == "HANDOFF_STALE", error.code
+                    atomic_json(out / "summary.json", saved)
+                    # Even a forged current binding cannot rescue stale batch content.
+                    changed = read_json(out / "batches.json")
+                    changed["batches"][0]["members"] = [1]
+                    atomic_json(out / "batches.json", changed)
+                    try:
+                        producer.export(api, "B001")
+                        raise AssertionError("changed batch composition accepted")
+                    except TrioError as error:
+                        assert error.code == "HANDOFF_STALE", error.code
+                results.append({"mode": mode, "schema": value["schema"], "members": value["batch"]["members"],
+                                "references": 6, "draft_group": True, "result": "PASS"})
+    print(json.dumps({"producer_blob": api._trio_source_blob, "checks": results}))
+
+
+if __name__ == "__main__":
+    import argparse
+    check = argparse.ArgumentParser(description="Offline qualification of explicitly installed, pinned Tranche sources")
+    check.add_argument("--tranche-root", action="append", required=True)
+    for selected_root in check.parse_args().tranche_root:
+        check_installed_producer(selected_root)
