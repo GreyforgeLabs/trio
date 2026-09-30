@@ -30,6 +30,7 @@ def parser():
     x=top("import");opt(x,"--dataset");opt(x,"--scope");opt(x,"--path",required=True);opt(x,"--snapshot",action="append")
     x=top("snapshots");dataset(x)
     f=family("corpus",["plan","run"]);dataset(f["plan"]);opt(f["plan"],"--inventory");opt(f["plan"],"--snapshot",action="append");opt(f["plan"],"--profile",default="discussion");dataset(f["run"]);opt(f["run"],"--corpus",required=True);opt(f["run"],"--read-token-env");opt(f["run"],"--request-budget",type=int)
+    opt(f["run"],"--refresh",action="store_true",help="Request new observations for all frozen members; continue with ordinary run")
     f=family("index",["build","info"])
     for x in f.values():selection(x)
     opt(f["build"],"--replace",action="store_true")
@@ -119,7 +120,7 @@ def run(a,p):
         if bool(a.inventory)==bool(a.snapshot):raise TrioError("INVALID_INVOCATION",exit_code=2)
         inventory=ev.combine_snapshots(a.dataset,a.snapshot)["snapshot"] if a.snapshot else a.inventory
         return ev.freeze_corpus(a.dataset,inventory,profile=a.profile)
-    if command=="corpus run":return ev.run_corpus(a.dataset,a.corpus,ReadTransport(a.read_token_env,store.config["timeout"]),budget=a.request_budget)
+    if command=="corpus run":return ev.run_corpus(a.dataset,a.corpus,ReadTransport(a.read_token_env,store.config["timeout"]),budget=a.request_budget,refresh=a.refresh)
     if command in ("index build","index info","search"):
         selection={"snapshot":a.snapshot,"corpus":a.corpus}
         if command=="index build":return search.build(a.dataset,selection,replace=a.replace)

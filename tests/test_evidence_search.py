@@ -870,12 +870,227 @@ class ProductCaptureProfilesTests(unittest.TestCase):
         plan=self.ev.freeze_corpus(self.dataset,self.snapshot,scope="open-prs")
         selected={"corpus":plan["corpus"]};before=self.ev.source(self.dataset).select(**selected)
         self.search.build(self.dataset,selected)
-        out=self.ev.run_corpus(self.dataset,plan["corpus"],self.read_transport(),budget=12)
+        out=self.ev.run_corpus(self.dataset,plan["corpus"],self.read_transport(),budget=12,refresh=True)
         self.assertLessEqual(out["requests"],12)
         after=self.ev.source(self.dataset).select(**selected)
         self.assertEqual([m["identity"] for m in before.members],[m["identity"] for m in after.members])
         with self.assertRaises(TrioError) as error:self.search.query(self.dataset,selected,"terminal")
         self.assertEqual(error.exception.code,"CHECKPOINT_CHANGED")
+
+
+class CorpusResumeTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.store = Store(Path(self.temp.name) / "home")
+        self.store.init()
+        self.ev = EvidenceService(self.store)
+        self.dataset = self.ev.enroll(dict(host="github.com", repository_id=42,
+            full_name="example/triage", visibility="public", observed_at=END))["dataset"]
+        self.read = self.transport()
+        inventory = self.ev.capture_inventory(self.dataset, self.read, limit=10)
+        self.corpus = self.ev.freeze_corpus(self.dataset, inventory["snapshot"])["corpus"]
+        self.state_path = self.ev.path(self.dataset, "evidence", "corpora", self.corpus + ".state.json")
+        self.read.calls.clear()
+
+    def transport(self):
+        class Read:
+            def __init__(inner):
+                inner.calls = []
+                inner.updated_at = START
+                inner.comments = []
+            def get(inner, path):
+                inner.calls.append(path)
+                if path == "/repos/example/triage":
+                    return dict(id=42, node_id="R_synthetic", full_name="example/triage", private=False)
+                rows = [dict(id=3000+n, number=n, node_id="I_SYNTHETIC_"+str(n),
+                    state="open", updated_at=inner.updated_at, comments=len(inner.comments),
+                    title="Synthetic issue "+str(n), body="Recorded public evidence",
+                    html_url="https://github.com/example/triage/issues/"+str(n)) for n in (10, 11, 12)]
+                if "issues?state=open" in path:
+                    return rows
+                if "/comments?" in path:
+                    page = int(path.rsplit("page=", 1)[1])
+                    return copy.deepcopy(inner.comments[(page-1)*100:page*100])
+                if path.rsplit("/", 1)[-1] in ("10", "11", "12"):
+                    return next(row for row in rows if row["number"] == int(path.rsplit("/", 1)[-1]))
+                raise AssertionError("unexpected synthetic endpoint")
+        return Read()
+
+    def state(self):
+        return json.loads(self.state_path.read_text())
+
+    def run_again(self, budget=5, refresh=False, read=None):
+        # Reopen services each time; progress must live on disk, not in an instance.
+        service = EvidenceService(Store(self.store.root))
+        selected = read or self.read
+        selected.calls.clear()
+        with patch("socket.socket", side_effect=AssertionError("network forbidden")):
+            result = service.run_corpus(self.dataset, self.corpus, selected, budget=budget, refresh=refresh)
+        self.assertLessEqual(result["requests"], budget)
+        self.assertEqual(result["requests"], len(selected.calls))
+        return result
+
+    def test_small_budgets_finish_all_members_without_recapturing_completed_ones(self):
+        for number in (10, 11, 12):
+            result = self.run_again()
+            self.assertTrue(any(path.endswith("/issues/"+str(number)) for path in self.read.calls))
+            self.assertEqual(sum(entry["outcome"] == "complete" for entry in self.state()["items"].values()), number-9)
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual({entry["attempts"] for entry in self.state()["items"].values()}, {2})
+
+    def test_completed_noop_preserves_checkpoint_bytes_and_mtime_without_reads(self):
+        complete = self.run_again(budget=15)
+        before = (self.state_path.read_bytes(), self.state_path.stat().st_mtime_ns)
+        with patch.object(self.read, "get", side_effect=AssertionError("completed member read")):
+            result = self.run_again()
+        self.assertEqual(result["requests"], 0)
+        self.assertEqual(result["checkpoint"], complete["checkpoint"])
+        self.assertEqual(before, (self.state_path.read_bytes(), self.state_path.stat().st_mtime_ns))
+
+    def test_persistently_partial_and_failed_members_do_not_starve_later_members(self):
+        for failure_path in ("/issues/10/comments?", "/issues/10"):
+            with self.subTest(failure_path=failure_path):
+                read = self.transport()
+                original = read.get
+                def get(path):
+                    if (failure_path.endswith("?") and failure_path in path) or path.endswith(failure_path):
+                        read.calls.append(path)
+                        raise TrioError("TRANSPORT_FAILURE")
+                    return original(path)
+                read.get = get
+                self.run_again(refresh=True, read=read)
+                for number in (11, 12):
+                    self.run_again(read=read)
+                    self.assertEqual(self.state()["items"]["issue:"+str(number)]["outcome"], "complete")
+                self.assertIn(self.state()["items"]["issue:10"]["outcome"], ("gaps", "error"))
+                self.run_again(read=read)
+                self.assertTrue(any("/issues/10" in path for path in read.calls))
+
+    def test_refresh_intent_survives_budget_stops_and_preserves_old_observations(self):
+        self.run_again(budget=15)
+        previous = self.state()
+        original_bytes = {path: path.read_bytes() for path in self.ev.path(self.dataset, "evidence", "snapshots").glob("*.json")}
+        self.read.updated_at = "2026-09-28T12:00:00Z"
+        self.run_again(refresh=True)
+        for number in (11, 12):
+            entry = self.state()["items"]["issue:"+str(number)]
+            self.assertEqual(entry["snapshot_id"], previous["items"]["issue:"+str(number)]["snapshot_id"])
+            self.assertEqual((entry["outcome"], entry["error"]), ("gaps", "refresh requested"))
+        for _ in range(2):
+            self.run_again()
+        for entry in self.state()["items"].values():
+            self.assertEqual(entry["outcome"], "complete")
+            self.assertEqual(self.ev.snapshot(self.dataset, entry["snapshot_id"])["items"][0]["revision"]["updated_at"], self.read.updated_at)
+        self.assertTrue(all(path.read_bytes() == raw for path, raw in original_bytes.items()))
+
+    def test_cancelled_member_does_not_restart_ahead_of_unattempted_members(self):
+        original = self.read.get
+        def cancelled(path):
+            if "/issues/10/comments?" in path:
+                self.read.calls.append(path)
+                raise KeyboardInterrupt()
+            return original(path)
+        self.read.get = cancelled
+        self.assertEqual(self.run_again()["status"], "interrupted")
+        self.read.get = original
+        for number in (11, 12, 10):
+            self.run_again()
+            self.assertEqual(self.state()["items"]["issue:"+str(number)]["outcome"], "complete")
+            self.assertTrue(any(path.endswith("/issues/"+str(number)) for path in self.read.calls))
+
+    def test_refresh_records_new_partial_revision_instead_of_hiding_it_with_old_complete(self):
+        self.read.comments = [dict(id=1, body="Old synthetic comment")]
+        self.run_again(budget=15)
+        old = self.state()["items"]["issue:10"]["snapshot_id"]
+        self.read.updated_at = "2026-09-28T12:00:00Z"
+        self.read.comments = [dict(id=1, body="New synthetic comment")]
+        self.run_again(budget=3, refresh=True)
+        entry = self.state()["items"]["issue:10"]
+        self.assertEqual(entry["outcome"], "gaps")
+        self.assertNotEqual(entry["snapshot_id"], old)
+        record = self.ev.snapshot(self.dataset, entry["snapshot_id"])["items"][0]
+        self.assertEqual(record["revision"]["updated_at"], self.read.updated_at)
+        self.assertEqual(record["components"]["comments"]["status"], "partial")
+        payload = self.ev.source(self.dataset).object("comments", record["components"]["comments"], "issue")
+        self.assertEqual(json.loads(payload), self.read.comments)
+        self.assertEqual(self.ev.snapshot(self.dataset, old)["items"][0]["components"]["comments"]["status"], "complete")
+
+    def test_partial_pagination_rotates_members_then_resumes_with_sufficient_budget(self):
+        self.read.comments = [dict(id=n, body="Synthetic comment "+str(n)) for n in range(101)]
+        for number in (10, 11, 12):
+            self.run_again()
+            self.assertEqual(self.state()["items"]["issue:"+str(number)]["outcome"], "gaps")
+            self.assertTrue(any(path.endswith("/issues/"+str(number)) for path in self.read.calls))
+        self.assertEqual({entry["attempts"] for entry in self.state()["items"].values()}, {2})
+        for number in (10, 11, 12):
+            self.run_again(budget=6)
+            entry = self.state()["items"]["issue:"+str(number)]
+            self.assertEqual(entry["outcome"], "complete")
+            record = self.ev.snapshot(self.dataset, entry["snapshot_id"])["items"][0]
+            self.assertEqual(record["components"]["comments"]["received_count"], 101)
+
+    def test_refresh_crash_before_acquisition_retains_remaining_refresh_work(self):
+        self.run_again(budget=15)
+        with patch.object(EvidenceService, "capture", side_effect=SystemExit("synthetic crash")), self.assertRaises(SystemExit):
+            self.run_again(refresh=True)
+        interrupted = self.state()
+        self.assertEqual(interrupted["status"], "running")
+        self.assertEqual(interrupted["items"]["issue:10"]["outcome"], "running")
+        self.assertEqual(interrupted["items"]["issue:11"]["error"], "refresh requested")
+        for number in (11, 12, 10):
+            self.run_again()
+            self.assertEqual(self.state()["items"]["issue:"+str(number)]["outcome"], "complete")
+            self.assertTrue(any(path.endswith("/issues/"+str(number)) for path in self.read.calls))
+
+    def test_missing_initial_state_recovers_but_corrupt_existing_state_refuses(self):
+        self.state_path.unlink()
+        self.run_again()
+        self.assertEqual(self.state()["items"]["issue:10"]["outcome"], "complete")
+        self.assertEqual(self.state()["items"]["issue:11"]["outcome"], "pending")
+        self.state_path.write_text("{}")
+        with self.assertRaises(ValueError):
+            self.run_again()
+        self.assertEqual(self.state_path.read_text(), "{}")
+        self.assertEqual(self.read.calls, [])
+
+    def test_crash_after_last_member_commit_finishes_without_reacquisition(self):
+        from trio_triage.evidence import service
+        original = service.atomic_bytes
+        def fail_final(path, raw):
+            if path == self.state_path and json.loads(raw)["status"] == "finished":
+                raise OSError("synthetic final progress failure")
+            return original(path, raw)
+        with patch.object(service, "atomic_bytes", side_effect=fail_final), self.assertRaises(OSError):
+            self.run_again(budget=15)
+        self.assertEqual(self.state()["status"], "running")
+        with patch.object(self.read, "get", side_effect=AssertionError("already captured")):
+            result = self.run_again()
+        self.assertEqual((result["requests"], result["status"]), (0, "finished"))
+
+    def test_invalid_budget_or_refresh_does_not_change_progress(self):
+        before = self.state_path.read_bytes()
+        for budget in (0, True, 10001):
+            with self.subTest(budget=budget), self.assertRaises(TrioError):
+                self.run_again(budget=budget, refresh=True)
+        with self.assertRaises(TrioError):
+            self.run_again(refresh="yes")
+        self.assertEqual(self.state_path.read_bytes(), before)
+        self.assertEqual(self.read.calls, [])
+
+    def test_cli_and_catalog_expose_explicit_refresh(self):
+        from trio_triage.cli import parser, run
+        from trio_triage.catalog import catalog
+        self.run_again(budget=15)
+        command = parser()
+        arguments = command.parse_args(["--home", str(self.store.root), "corpus", "run", "--dataset", self.dataset,
+            "--corpus", self.corpus, "--request-budget", "5", "--refresh", "--json"])
+        self.read.calls.clear()
+        with patch("trio_triage.transport.ReadTransport", return_value=self.read), patch("socket.socket", side_effect=AssertionError("network forbidden")):
+            result = run(arguments, command)
+        self.assertEqual(result["requests"], 5)
+        leaf = next(leaf for leaf in catalog(command)["leaves"] if leaf["command"] == "corpus run")
+        self.assertTrue(any("--refresh" in argument["flags"] for argument in leaf["arguments"]))
 
 
 class PinnedContractDifferentialTests(unittest.TestCase):

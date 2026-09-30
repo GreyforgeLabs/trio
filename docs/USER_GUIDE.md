@@ -17,6 +17,16 @@ Team event files use explicitly selected workspace destinations, user-managed Gi
 
 A bounded live inventory is explicit: `trio capture --dataset DATASET --inventory --limit 100 --request-budget 100 --json` (use spaces between flag and value). It records completeness/truncation and freezes observed membership. Alternatively select already-captured observations with `trio corpus plan --dataset DATASET --snapshot SNAPSHOT1 --snapshot SNAPSHOT2 --profile discussion --json`. Changed identity/revision combinations refuse instead of selecting an arbitrary winner. Run the returned corpus explicitly to capture selected members, then explicitly build a new index for its changed checkpoint.
 
+`trio corpus run` resumes unfinished members and retries partial or failed captures,
+prioritizing the least-attempted members so small request budgets can make progress.
+Completed members keep their recorded observations; completion does not establish
+current visibility or freshness. A completed run with no remaining work makes no
+requests and preserves its checkpoint. To request new observations for every frozen
+member, use `trio corpus run --refresh` once, then ordinary `corpus run` to continue
+after a budget stop or interruption. Outstanding refresh work is recorded as `gaps`
+with `refresh requested`; older immutable snapshots remain inspectable until replaced
+in corpus progress. Repeating `--refresh` requests another full refresh.
+
 The typical offline review sequence is import -> index build -> search -> retrieve selected reference -> finding propose -> finding review exact digest -> team export preview -> approve/export -> team import -> packet local or approved share. Findings/groups use explicit synthetic/public attribution from the init config; names in source text and imported bundles never grant those roles. A comment or explained close/reopen action requires a separately prepared exact live plan and local publisher authorization; production execution remains disabled until a disposable public live test is separately authorized.
 
 To continue reading a selected source, pass the returned fragment's

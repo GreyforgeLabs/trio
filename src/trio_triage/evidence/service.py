@@ -471,13 +471,39 @@ class EvidenceService:
         descriptor=latest_record["components"].get(ref["component"]) if latest_record else None
         return bool(latest_record and latest_record["identity"]==ref["identity"] and descriptor and descriptor["object"]==ref["object"] and descriptor["revision"]==ref["revision"] and descriptor["status"]=="complete")
 
-    def corpus_run(self,dataset,corpus,transport,*,budget=None):
+    def corpus_run(self,dataset,corpus,transport,*,budget=None,refresh=False):
         c.checked_id(corpus);source=self.source(dataset);selected=source.select(corpus=corpus)
         plan=self._json(self.path(dataset,"evidence","corpora",corpus+".plan.json"))
         state_path=self.path(dataset,"evidence","corpora",corpus+".state.json")
-        state=self._json(state_path)
         remaining=self.store.config["request_budget"] if budget is None else budget
-        if type(remaining) is not int or remaining<1:raise TrioError("RESOURCE_LIMIT")
+        if type(remaining) is not int or not 1<=remaining<=10000:raise TrioError("RESOURCE_LIMIT")
+        if type(refresh) is not bool:raise TrioError("INVALID_ARGUMENT",exit_code=2)
+        # A plan can survive a crash before its initial progress file is published.
+        # source.select already validated the plan and any existing state.
+        state=self._json(state_path) if state_path.exists() else dict(
+            schema_version=1,artifact="evidence-corpus-state",plan_id=corpus,
+            updated_at=c.now(),status="pending",last_run=None,
+            items={f"{m['kind']}:{m['number']}":dict(attempts=0,snapshot_id=None,outcome="pending",error=None) for m in plan["members"]})
+        def commit():
+            value={k:v for k,v in state.items() if k!="checksum"};value["updated_at"]=c.now()
+            with self._lock():atomic_bytes(state_path,c.canonical(sealed(value)).encode())
+        if refresh:
+            # Gaps here describe outstanding acquisition work. Keep the old
+            # immutable observations available until each replacement is recorded.
+            for entry in state["items"].values():
+                if entry["outcome"]=="complete":entry.update(outcome="gaps",error="refresh requested")
+        pending=[identity for identity in plan["members"] if state["items"][f"{identity['kind']}:{identity['number']}"]["outcome"]!="complete"]
+        # Stable ties preserve frozen membership order. A repeatedly partial or
+        # failing member must not consume every subsequent run's bounded budget.
+        pending.sort(key=lambda identity:state["items"][f"{identity['kind']}:{identity['number']}"]["attempts"])
+        def response(requests):
+            current=self.source(dataset).select(corpus=corpus)
+            return {"schema":"trio.corpus-run/v1","dataset":dataset,"corpus":corpus,"checkpoint":current.checkpoint,"requests":requests,"status":state["status"],"coverage":current.coverage}
+        if not pending:
+            # Preserve completed checkpoints on a no-op, but finish a run that
+            # crashed after its final member was durably committed.
+            if state["status"]!="finished":state["status"]="finished";commit()
+            return response(0)
         class BudgetTransport:
             token=getattr(transport,"token",None if not hasattr(transport,"namespace") else object())
             def namespace(inner):
@@ -502,12 +528,11 @@ class EvidenceService:
                 if remaining<=0:raise TrioError("REQUEST_BUDGET")
                 remaining-=1
                 return transport.get(path)
-        wrapped=BudgetTransport();requests=remaining;state["status"]="running"
-        def commit():
-            value={k:v for k,v in state.items() if k!="checksum"};value["updated_at"]=c.now()
-            with self._lock():atomic_bytes(state_path,c.canonical(sealed(value)).encode())
+        wrapped=BudgetTransport();requests=remaining;started=c.now();state["status"]="running"
+        # Persist refresh intent before the first request, so ordinary run can
+        # continue the same refresh after a budget stop or interruption.
         commit()
-        for identity in plan["members"]:
+        for identity in pending:
             if remaining<=0:state["status"]="stopped";break
             key=identity["kind"]+":"+str(identity["number"]);entry=state["items"][key]
             entry["attempts"]+=1;entry.update(outcome="running",error=None);commit()
@@ -523,9 +548,9 @@ class EvidenceService:
                 state["status"]="interrupted" if isinstance(error,KeyboardInterrupt) else "stopped";commit();break
             commit()
         else:state["status"]="finished"
-        state["last_run"]=dict(started_at=c.now(),request_budget=requests,requests=requests-remaining,reason=None if state["status"]=="finished" else "stopped")
-        commit();new=self.source(dataset).select(corpus=corpus)
-        return {"schema":"trio.corpus-run/v1","dataset":dataset,"corpus":corpus,"checkpoint":new.checkpoint,"requests":requests-remaining,"status":state["status"],"coverage":new.coverage}
+        state["last_run"]=dict(started_at=started,request_budget=requests,requests=requests-remaining,reason=None if state["status"]=="finished" else "stopped")
+        commit()
+        return response(requests-remaining)
 
     run_corpus = corpus_run
 
