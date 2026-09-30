@@ -32,12 +32,21 @@ GraphQL evidence, so anonymous or insufficiently permitted reads may leave
 coverage incomplete. A captured CI result is evidence of an observation,
 not an execution of tests by this command.
 
-The initial adapter supports Tranche commit
+The original adapter supports Tranche commit
 `99ffca6dc635d855ed57e87204f9778a300233cd` (v0.2.1), with exact `tranche.py`
 Git blob `d3ad2664cbcd8e0f83626a72dbd9750252d634d4`. It verifies those source
 bytes before loading the selected dependency. Unknown or edited versions
 fail with `HANDOFF_VERSION`; upgrading support requires a reviewed pin and
 compatibility tests. No dependency download, install or automatic update occurs.
+
+This local compatibility candidate also pins the independently reviewed
+provider-aware `tranche.py` blob `45ccd80132ff740c96f5b32254385a5b45a8c1f0`,
+from candidate tree `a6210e2f2313e7608be6f016a675af01aefc6cdf` based on the
+same upstream commit above. This identifies a reviewed source tree, not a
+published upstream commit or release. The loader accepts only these two exact
+source blobs; it never relaxes the check or downloads an updated dependency.
+The tree records provenance; the executed file's bytes are the trust pin.
+The provider work remains a separate Tranche change, without vendoring its code.
 
 ## What is bound and what remains a proposal
 
@@ -47,6 +56,24 @@ composition. It detects file changes across export. The internal
 `trio.tranche-handoff/v1` contract carries source/version digests, selected
 public PR metadata, batch identity, and the original uncertain/related-group
 diagnostics. Model-generated reviewer prompts are not used as commands.
+
+The provider-aware source uses `trio.tranche-handoff/v2`. It retains the
+explicit reviewed base/tree/blob identity and the report's provider descriptor
+(adapter, provider ID, requested model, public settings and capabilities),
+descriptor fingerprint, selected normalized PR answers, resolved-model claims,
+and relevant pair observations. This preserves unsupported/null values and
+explicit abstentions, including reasons; it does not reinterpret them as zero
+risk, source equivalence or approval. These provider observations remain opaque,
+unverified claims, not Trio findings or verified model execution evidence.
+
+Trio reads the provider recorded in the report, without activating a provider
+or reading a provider configuration/key file. It checks the descriptor's
+fingerprint, recomputes the provider-aware observation binding, and requires
+the batches' full report binding and exact recomputed content to match.
+Relabelling an old report with changed settings/provider identity is refused.
+Changing a separate Tranche configuration file alone does not change an
+already-produced report; regenerate it with Tranche before selecting that
+configuration's new results. Legacy v1 envelopes and reports remain supported.
 
 The consumer checks repository and PR identities, full base/head SHAs, update
 time, open state and public scope. Actual Trio captures supply structured
@@ -110,6 +137,17 @@ Synthetic integration tests cover revision drift, stale generations,
 uncertainty preservation, request bounds, partial capture/resume, replay,
 crash recovery, unsafe paths, and unrecognized dependency code. The existing
 contribution suite verifies symlink/submodule refusal. Tests use no model
-credentials, live GitHub calls, or GitHub mutations. Provider replacement,
-classifier evaluation, live mutation qualification and automatic scheduling
-are separate work; this adapter does not imply that they are implemented.
+credentials, live GitHub calls, or GitHub mutations. Classifier evaluation,
+live model/mutation qualification and automatic scheduling are separate work.
+The provider-aware compatibility check exercises real, separately installed
+source with synthetic observations: default Jev protocol, category-only
+offline results, explicit PR/pair abstention, stale provider settings, and
+changed batches. All paths stop at draft review groups. Run it explicitly:
+
+```bash
+PYTHONPATH=src python tests/test_handoff.py --tranche-root LEGACY_CHECKOUT --tranche-root REVIEWED_PROVIDER_CHECKOUT
+```
+
+This opt-in check fails closed for unknown source and uses only synthetic
+transports/model responses. It is additional to the ordinary offline test
+suite; no third-party source is included in the test distribution.

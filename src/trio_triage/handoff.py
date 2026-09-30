@@ -17,9 +17,64 @@ from .evidence.service import EvidenceService
 from .search.projections import ProjectionPolicy, project
 
 ENVELOPE = "trio.tranche-handoff/v1"
+PROVIDER_ENVELOPE = "trio.tranche-handoff/v2"
 MAX_MEMBERS = 100
 TRANCHE_COMMIT = "99ffca6dc635d855ed57e87204f9778a300233cd"
 TRANCHE_BLOB = "d3ad2664cbcd8e0f83626a72dbd9750252d634d4"
+# Reviewed local provider candidate: a tree is not a published upstream commit.
+TRANCHE_PROVIDER_TREE = "a6210e2f2313e7608be6f016a675af01aefc6cdf"
+TRANCHE_PROVIDER_BLOB = "45ccd80132ff740c96f5b32254385a5b45a8c1f0"
+JUDGMENT_NAMES = {"category", "risk", "finished_form", "review_effort", "is_fix", "security_flag", "dupe_signal"}
+
+
+def validate_provider_observations(value, members):
+    """Validate provenance/data shape, never infer quality or grant authority."""
+    c.fields(value, ("descriptor", "fingerprint", "judgments", "pairs"))
+    descriptor = value["descriptor"]
+    c.fields(descriptor, ("adapter", "provider_id", "model", "settings", "capabilities"))
+    if descriptor["adapter"] not in ("typesafe-jev/v1", "json-results/v1"):
+        raise ValueError()
+    for name in ("provider_id", "model"):
+        c.text(descriptor[name], name)
+        if len(descriptor[name]) > 200 or any(ord(ch) < 32 for ch in descriptor[name]):
+            raise ValueError()
+    if not isinstance(descriptor["settings"], dict) or len(c.canonical(descriptor).encode()) > 16384:
+        raise ValueError()
+    capabilities = descriptor["capabilities"]
+    c.fields(capabilities, ("judge", "pair"))
+    for task, allowed in (("judge", JUDGMENT_NAMES), ("pair", {"sameness"})):
+        names = capabilities[task]
+        if (not isinstance(names, list) or any(not isinstance(name, str) for name in names)
+                or len(set(names)) != len(names) or set(names) - allowed):
+            raise ValueError()
+    if capabilities["pair"] and "category" not in capabilities["judge"]:
+        raise ValueError()
+    if value["fingerprint"] != digest(descriptor):
+        raise ValueError()
+    if (not isinstance(value["judgments"], list) or len(value["judgments"]) > len(members)
+            or not isinstance(value["pairs"], list) or len(value["pairs"]) > 10000):
+        raise ValueError()
+    seen = set()
+    for record in value["judgments"]:
+        c.fields(record, ("number", "binding", "answers", "resolved_model"))
+        c.natural(record["number"], "number", 1)
+        c.checked_id(record["binding"])
+        if (record["number"] not in members or record["number"] in seen
+                or not isinstance(record["answers"], dict) or set(record["answers"]) != JUDGMENT_NAMES
+                or any(not isinstance(answer, dict) for answer in record["answers"].values())):
+            raise ValueError()
+        seen.add(record["number"])
+    seen = set()
+    for record in value["pairs"]:
+        c.fields(record, ("a", "b", "binding", "status", "reason", "verdict", "probabilities", "resolved_model"))
+        c.natural(record["a"], "a", 1)
+        c.natural(record["b"], "b", 1)
+        c.checked_id(record["binding"])
+        key = (record["a"], record["b"])
+        if record["a"] >= record["b"] or not members.intersection(key) or key in seen:
+            raise ValueError()
+        seen.add(key)
+    # Answer values/reasons remain opaque unverified claims, like relationships.
 
 
 def sealed(value):
@@ -64,16 +119,22 @@ def pr_identity(raw, repository):
 
 def validate_envelope(value):
     try:
-        c.fields(value, ("schema", "source", "repository", "batch", "items", "relationships", "digest"))
-        if value["schema"] != ENVELOPE or value["digest"] != digest({k: v for k, v in value.items() if k != "digest"}):
+        provider_aware = isinstance(value, dict) and value.get("schema") == PROVIDER_ENVELOPE
+        required = ("schema", "source", "repository", "batch", "items", "relationships", "digest")
+        c.fields(value, (*required, "provider") if provider_aware else required)
+        if value["schema"] not in (ENVELOPE, PROVIDER_ENVELOPE) or value["digest"] != digest({k: v for k, v in value.items() if k != "digest"}):
             raise ValueError()
         repository = value["repository"]
         c.validate_repository(repository)
         if repository["host"] != "github.com" or repository["database_id"] is None:
             raise ValueError()
         source = value["source"]
-        c.fields(source, ("tool_commit", "tool_blob", "snapshot_digest", "observed_at", "report_binding", "output_digests"))
-        if source["tool_commit"] != TRANCHE_COMMIT or source["tool_blob"] != TRANCHE_BLOB:
+        source_fields = ("tool_blob", "snapshot_digest", "observed_at", "report_binding", "output_digests")
+        c.fields(source, (*source_fields, "tool_base_commit", "tool_tree") if provider_aware else (*source_fields, "tool_commit"))
+        supported = ((source["tool_base_commit"], source["tool_tree"], source["tool_blob"]) ==
+                     (TRANCHE_COMMIT, TRANCHE_PROVIDER_TREE, TRANCHE_PROVIDER_BLOB)) if provider_aware else (
+                     (source["tool_commit"], source["tool_blob"]) == (TRANCHE_COMMIT, TRANCHE_BLOB))
+        if not supported:
             raise TrioError("HANDOFF_VERSION", "Unsupported Tranche producer version")
         for name in ("snapshot_digest", "report_binding"):
             c.checked_id(source[name])
@@ -97,6 +158,8 @@ def validate_envelope(value):
             seen.add(identity["number"])
         if seen != set(members):
             raise ValueError()
+        if provider_aware:
+            validate_provider_observations(value["provider"], seen)
         relationships = value["relationships"]
         c.fields(relationships, ("confirmed_groups", "review_groups", "uncertain_pairs", "meaning"))
         if any(not isinstance(relationships[key], list) for key in ("confirmed_groups", "review_groups", "uncertain_pairs")):

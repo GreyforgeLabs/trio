@@ -1068,8 +1068,8 @@ No model calls or GitHub writes. Output: `trio.handoff/v1`.
 
 `trio handoff prepare --dataset DATASET_ID --path HANDOFF_JSON --actor ACTOR`
 
-Effect: local writes only. Validates an explicit `trio.tranche-handoff/v1`
-envelope and records repeat-safe pending work. This optional route does not
+Effect: local writes only. Validates an explicit `trio.tranche-handoff/v1` or
+provider-aware `trio.tranche-handoff/v2` envelope and records repeat-safe pending work. This optional route does not
 capture evidence or create a group. Output: `trio.handoff/v1`.
 
 ### handoff run
