@@ -18,3 +18,10 @@ Team event files use explicitly selected workspace destinations, user-managed Gi
 A bounded live inventory is explicit: `trio capture --dataset DATASET --inventory --limit 100 --request-budget 100 --json` (use spaces between flag and value). It records completeness/truncation and freezes observed membership. Alternatively select already-captured observations with `trio corpus plan --dataset DATASET --snapshot SNAPSHOT1 --snapshot SNAPSHOT2 --profile discussion --json`. Changed identity/revision combinations refuse instead of selecting an arbitrary winner. Run the returned corpus explicitly to capture selected members, then explicitly build a new index for its changed checkpoint.
 
 The typical offline review sequence is import -> index build -> search -> retrieve selected reference -> finding propose -> finding review exact digest -> team export preview -> approve/export -> team import -> packet local or approved share. Findings/groups use explicit synthetic/public attribution from the init config; names in source text and imported bundles never grant those roles. A comment or explained close/reopen action requires a separately prepared exact live plan and local publisher authorization; production execution remains disabled until a disposable public live test is separately authorized.
+
+To continue reading a selected source, pass the returned fragment's
+`continuation.byte_offset` to `trio retrieve --ref REF.json --byte-offset OFFSET`
+and reuse its `continuation.window` with `--window`. The offset is measured in
+UTF-8 bytes from the cited source boundary, not from the previous excerpt.
+Keep the verified reference for that source; invalid offsets and offsets inside
+a UTF-8 character are refused. An omitted offset retains the initial behavior.

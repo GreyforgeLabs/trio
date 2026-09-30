@@ -16,9 +16,11 @@ class TriageService:
         payload["decision_digest"]=digest(payload)
         return self.team.append(finding_id or "finding-"+uuid.uuid4().hex,"finding",payload,actor,parents,refs)
     def show(self,entity):
-        heads=self.team.heads(entity)
+        return self._show(entity,self.team._view())
+    def _show(self,entity,view):
+        heads=view.heads.get(entity,[])
         if not heads:raise TrioError("EVIDENCE_MISSING")
-        revisions=[self.team.get(x) for x in heads];reviews=[]
+        revisions=[self.team._with_trust(view.by_id[x]) for x in heads];reviews=[]
         from ..evidence import EvidenceService
         stale=False
         for revision in revisions:
@@ -26,17 +28,18 @@ class TriageService:
                 try:
                     if not EvidenceService(self.store).is_current(ref):stale=True
                 except (TrioError,AttributeError):stale=True
-        for e in self.team.events():
+        for e in view.reviews.get(entity,[]):
             if e["operation"]=="review" and e["payload"]["finding_id"]==entity:
                 p=e["payload"];current=any(r["event_id"]==p["finding_revision"] and r["payload"].get("decision_digest")==p["decision_digest"] for r in revisions)
-                local_review=self.team.get(e["event_id"])["trust"]=="locally-recorded"
-                withdrawn=any(w["operation"]=="withdraw-review" and w["payload"].get("review_id")==e["event_id"] and w["actor"]["id"]==e["actor"]["id"] and (not local_review or w.get("local_origin")==e.get("local_origin")==self.store.config["installation_id"] and bool(self.store.config["installation_id"])) for w in self.team.events())
-                reviews.append({"event_id":e["event_id"],"actor":e["actor"],"decision":p["decision"],"state":"withdrawn" if withdrawn else "current" if current and not stale else "stale","trust":self.team.get(e["event_id"])["trust"]})
-        resolutions=[e for e in self.team.events() if e["entity_id"]=="review-resolution-"+entity and e["event_id"] in self.team.heads("review-resolution-"+entity)]
+                trust=self.team._with_trust(e)["trust"]
+                local_review=trust=="locally-recorded"
+                withdrawn=any(w["actor"]["id"]==e["actor"]["id"] and (not local_review or w.get("local_origin")==e.get("local_origin")==self.store.config["installation_id"] and bool(self.store.config["installation_id"])) for w in view.withdrawals.get(e["event_id"],[]))
+                reviews.append({"event_id":e["event_id"],"actor":e["actor"],"decision":p["decision"],"state":"withdrawn" if withdrawn else "current" if current and not stale else "stale","trust":trust})
+        resolutions=[view.by_id[x] for x in view.heads.get("review-resolution-"+entity,[])]
         applicable_resolutions=0
         resolution_states=[]
         for resolution in resolutions:
-            trust=self.team.get(resolution["event_id"])["trust"]
+            trust=self.team._with_trust(resolution)["trust"]
             local_authority=any(review["event_id"] in resolution["parents"] and review["trust"]=="locally-recorded" for review in reviews)
             applicable=trust=="locally-recorded" or not local_authority
             resolution_states.append({"event_id":resolution["event_id"],"trust":trust,"state":"applied" if applicable else "unverified"})
