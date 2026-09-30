@@ -22,6 +22,8 @@ Trio builds on the work of these upstream authors:
   Its cache, projection, indexing, search, and retrieval components underpin
   Trio's local evidence search and citations.
 
+**Naming credit:** @ocdjeremy came up with the name **Trio**.
+
 Thank you to both authors and their upstream contributors. Their original
 copyrights and licenses are preserved. See [third-party notices](THIRD_PARTY_NOTICES.md)
 for exact source versions, adaptations, and the additional Vyral attribution.
