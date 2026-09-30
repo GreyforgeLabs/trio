@@ -89,6 +89,11 @@ def parser():
         x=f[k];opt(x,"--branch",required=True);opt(x,"--title",required=True);opt(x,"--body",required=True,help="UTF-8 file containing exact pull request body");opt(x,"--author-name",required=True);opt(x,"--author-email",required=True);opt(x,"--message");opt(x,"--mode",default="direct",choices=["direct","fork"]);opt(x,"--fork-owner")
     for k in ("approve","publish"):actor(f[k])
     opt(f["approve"],"--digest",required=True)
+    f=family("handoff",["tranche","prepare","run","show"])
+    x=f["tranche"];dataset(x);actor(x);opt(x,"--tranche-root",required=True);opt(x,"--batch",required=True);opt(x,"--read-token-env");opt(x,"--request-budget",type=int,default=100)
+    x=f["prepare"];dataset(x);actor(x);opt(x,"--path",required=True)
+    for k in ("run","show"):opt(f[k],"--id",required=True)
+    opt(f["run"],"--read-token-env");opt(f["run"],"--request-budget",type=int,default=100)
     return p
 
 def run(a,p):
@@ -97,6 +102,19 @@ def run(a,p):
     store=Store(a.home,a.config_location)
     if command=="init":store.init(read_json(a.config) if a.config else None);return {"schema":"trio.init/v1","state_version":1,"writes_enabled":store.config["writes_enabled"]}
     store.require()
+    if command.startswith("handoff "):
+        from .handoff import HandoffService
+        service=HandoffService(store)
+        if a.leaf=="tranche":
+            from .tranche_export import read_selected_batch
+            selected=service.prepare(a.dataset,read_selected_batch(a.tranche_root,a.batch),a.actor)
+            from .transport import ReadTransport
+            return service.run(selected["id"],ReadTransport(a.read_token_env,store.config["timeout"]),a.request_budget)
+        if a.leaf=="prepare":return service.prepare(a.dataset,read_json(a.path),a.actor)
+        if a.leaf=="show":return service.show(a.id)
+        if a.leaf=="run":
+            from .transport import ReadTransport
+            return service.run(a.id,ReadTransport(a.read_token_env,store.config["timeout"]),a.request_budget)
     if command.startswith(("inventory ","ops ","contribution ")):
         from .operations import GitHubTransport,MaintenanceService,OperationState
         transport=GitHubTransport(a.token_env,store.config["timeout"]) if getattr(a,"token_env",None) else None

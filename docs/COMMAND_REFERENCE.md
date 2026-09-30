@@ -2,7 +2,7 @@
 
 [Documentation home](../README.md) · [Getting started](GETTING_STARTED.md) · [Feature guide](FEATURES.md)
 
-This reference covers all **62** current Trio command leaves. Arguments, defaults,
+This reference covers all **66** current Trio command leaves. Arguments, defaults,
 choices, effects, and schemas were checked against the parser/catalog. It documents
 the current public Trio CLI. Start with the [quickstart](GETTING_STARTED.md) if
 you are installing it for the first time.
@@ -1049,3 +1049,42 @@ Output schema: `trio.contribution-refresh/v1`. Explicit authorization declared: 
 | `--request-budget` | no | default `1000`; integer |
 
 Inspect help: `trio contribution refresh --help`.
+
+## Tranche interoperability
+
+See the [Tranche workflow](TRANCHE_WORKFLOW.md) for the supported dependency
+pin, versioned handoff contract, and complete recovery examples.
+
+### handoff tranche
+
+`trio handoff tranche --dataset DATASET_ID --tranche-root CHECKOUT --batch BATCH_ID --actor ACTOR [--read-token-env NAME] [--request-budget 100]`
+
+Effect: pinned local dependency code + GitHub reads + local state writes.
+Reads a separately installed supported Tranche source and report, verifies its
+current generation, then captures exact revisions and creates a draft group.
+No model calls or GitHub writes. Output: `trio.handoff/v1`.
+
+### handoff prepare
+
+`trio handoff prepare --dataset DATASET_ID --path HANDOFF_JSON --actor ACTOR`
+
+Effect: local writes only. Validates an explicit `trio.tranche-handoff/v1`
+envelope and records repeat-safe pending work. This optional route does not
+capture evidence or create a group. Output: `trio.handoff/v1`.
+
+### handoff run
+
+`trio handoff run --id HANDOFF_ID [--read-token-env NAME] [--request-budget 100]`
+
+Effect: GitHub reads + local writes. The budget is 1–10,000 reads for the whole
+run. Incomplete captures are retained for explicit resume; changed revisions
+refuse group creation. Completed repeats return recorded observations without
+new reads. Output: `trio.handoff/v1`; inspect `complete`, `outcome`, and `error`.
+
+### handoff show
+
+`trio handoff show --id HANDOFF_ID`
+
+Effect: local reads only. Inspects the selected input, capture coverage,
+structured references and draft group identifiers. Use `--max-bytes` for a
+larger exact record when needed. Output: `trio.handoff/v1`.

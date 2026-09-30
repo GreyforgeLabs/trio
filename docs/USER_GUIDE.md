@@ -46,6 +46,10 @@ See [policy setup](OPERATIONS_GUIDE.md#configure-a-local-policy).
 
 ## Capture public evidence
 
+For a Tranche batch, the [one-command handoff](TRANCHE_WORKFLOW.md) validates
+the selected report, captures comparison evidence, and creates a draft group.
+The projects remain independently usable; no manual JSON transfer is required.
+
 Enroll a public repository with a read token variable, then copy its returned
 `dataset` into the capture commands. Numbers below are placeholders for real
 issues/PRs in that repository:
