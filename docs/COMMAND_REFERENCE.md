@@ -4,7 +4,8 @@
 
 This reference covers all **62** current Trio command leaves. Arguments, defaults,
 choices, effects, and schemas were checked against the parser/catalog. It documents
-current public Trio, whose integration into the existing ForgeHub codebase remains unfinished.
+the current public Trio CLI. Start with the [quickstart](GETTING_STARTED.md) if
+you are installing it for the first time.
 
 ## Global options
 

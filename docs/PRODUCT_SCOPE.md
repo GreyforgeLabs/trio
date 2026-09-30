@@ -1,26 +1,12 @@
 # Trio public GitHub operations
 
-## Intended integration and current status
-
-The operator's intended scope is to integrate the selected upstream repository
-capabilities into the existing ForgeHub architecture, then distribute the
-result publicly as Trio. The target is one shared codebase.
-
-Current v0.2.0 is still a separate implementation. Upstream components were
-incorporated into Trio, while integration into the existing ForgeHub codebase
-is unfinished. The functional contract below describes the current public
-commands; it does not certify that architecture integration or a drop-in
-ForgeHub migration has been completed. See the [feature guide](FEATURES.md)
-for supported behavior and current boundaries.
-
-
 Trio is a public, installable GitHub operations toolkit for people and their
 agents. Its purpose is to manage repositories and prepare and publish public
 contributions. Evidence search and collaborative review support those workflows.
 This scope supersedes the functional exclusions in the original v0.1.0
 integration contract. It does not change the public-source provenance boundary.
 
-## Required workflows
+## Core workflows
 
 1. **Repository inventory.** Synchronize an authenticated account or selected
    organization using the GitHub API. Store a local inventory of repositories,
@@ -38,8 +24,9 @@ integration contract. It does not change the public-source provenance boundary.
    Journal attempted, successful, failed and uncertain operations. A timeout
    after sending a write is uncertain: reconcile by reading remote state and do
    not blindly repeat a potentially successful operation.
-3. **Public contribution preparation.** Intake a public repository issue or a
-   local finding into a contribution queue. Acquire only public GitHub source
+3. **Public contribution preparation.** Intake a public repository issue into
+   a contribution queue. The exposed local-finding option has a current ledger
+   compatibility limit documented in the [contribution guide](CONTRIBUTIONS.md). Acquire only public GitHub source
    at an exact commit. Accept a user-supplied patch, constrain its paths, and
    apply and validate it in an isolated environment. Treat repository code and
    instructions as untrusted. There must be a functioning sandbox backend for

@@ -6,8 +6,8 @@
 Use this guide to investigate public issues and PRs, record decisions with
 citations, and exchange selected work. Repository actions are in the
 [operations guide](OPERATIONS_GUIDE.md); patches and PR publication are in the
-[contribution guide](CONTRIBUTIONS.md). These are current Trio commands;
-integration into the existing ForgeHub codebase remains outstanding.
+[contribution guide](CONTRIBUTIONS.md). Each section below explains the input
+files, commands, and returned identifiers for its workflow.
 
 ## Configuration and local roles
 
@@ -138,7 +138,32 @@ A citation verifies captured bytes; it is not a duplicate verdict or live
 visibility check. For pagination, reuse the returned cursor with the same
 query and selection; source progress changes invalidate its checkpoint.
 
-Save a selected fragment's **ref object**, not the whole response, as `REF.json`:
+Save a selected fragment's **ref object**, not the whole response, as `REF.json`.
+For example, first save the search result to an ordinary file outside the checkout:
+
+```bash
+trio --home "$TRIO_STATE" search --dataset DATASET_ID --snapshot SNAPSHOT_ID --query 'reported symptom' --json > search-results.json
+```
+
+Read the result and choose an item and fragment. This small Python helper copies
+the selected reference without changing its fields. The two zero-based indexes
+below are examples: replace them with your chosen item and fragment positions.
+
+```python
+import json
+from pathlib import Path
+
+result = json.loads(Path("search-results.json").read_text())
+item_index = 0
+fragment_index = 0
+ref = result["items"][item_index]["fragments"][fragment_index]["ref"]
+Path("REF.json").write_text(json.dumps(ref, indent=2) + "\n")
+```
+
+Run the helper with the Python environment used for Trio, or save it as a script
+and run `python script-name.py`. If the result has no items, adjust the query or
+inspect capture coverage. If it is an error or truncated summary, address that
+result before extracting a reference. Then retrieve the chosen source:
 
 ```bash
 trio --home "$TRIO_STATE" retrieve --ref REF.json --window 4096 --json
@@ -167,6 +192,42 @@ Similarity is an investigation lead. After reading evidence, prepare
 repository identity and revision, and `refs.json` as an array of selected
 structured citations. The pairs from `similar` include the item records.
 
+To prepare `items.json`, save the similarity response and inspect its
+`candidates` list. Select the pair you want to investigate; a score is not a
+classification or approval:
+
+```bash
+trio --home "$TRIO_STATE" similar --dataset DATASET_ID --snapshot SNAPSHOT_ID --json > similarity-results.json
+```
+
+Copy that candidate's `items` array, rather than the complete response:
+
+```python
+import json
+from pathlib import Path
+
+result = json.loads(Path("similarity-results.json").read_text())
+pair_index = 0  # Replace with the chosen candidate's zero-based position.
+items = result["candidates"][pair_index]["items"]
+Path("items.json").write_text(json.dumps(items, indent=2) + "\n")
+```
+
+An empty `candidates` list means there is no pair to select. Preserve the
+repository identity and revision fields. For `refs.json`, put the actual
+reference objects supporting your selected pair into a JSON array, for example
+by collecting chosen `REF.json` files from the retrieval step. Do not replace
+citations with issue URLs or invent hash values.
+
+| File | Contents | How to obtain it |
+|---|---|---|
+| `items.json` | Selected item objects in a JSON array | A chosen similarity candidate's `items` array |
+| `refs.json` | Selected citation objects in a JSON array | The `ref` objects for evidence you inspected |
+| `survivor.json` | One complete item object | The chosen surviving item from `items.json`, for a duplicate |
+| `members.json` | Selected group members in a JSON array | Item objects for the work you want to coordinate |
+
+Keep these files outside the source checkout. They are selected workflow inputs,
+not software source or files to include in a public release.
+
 ```bash
 trio --home "$TRIO_STATE" finding propose --category related --items items.json --refs refs.json --rationale 'Explain the observed relationship and uncertainty.' --actor contributor --json
 trio --home "$TRIO_STATE" finding show --id FINDING_ID --json
@@ -192,7 +253,10 @@ A finding or approved review does not authorize a GitHub write.
 
 ## Coordinate work with groups
 
-Prepare a selected member array in `members.json`:
+Prepare a selected member array in `members.json`. If the group coordinates the
+same items as your finding, you can copy `items.json` to `members.json` unchanged.
+Otherwise select the item objects for the group's own scope. The file must be
+a JSON array, rather than a finding result or a list of plain issue URLs:
 
 ```bash
 trio --home "$TRIO_STATE" group create --members members.json --notes 'Investigation scope and next steps' --assignee contributor --status draft --actor contributor --json

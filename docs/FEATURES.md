@@ -3,10 +3,9 @@
 [Documentation home](../README.md) · [Getting started](GETTING_STARTED.md) ·
 [Command reference](COMMAND_REFERENCE.md)
 
-The intended scope is to integrate selected repositories into ForgeHub and
-distribute that enhanced codebase publicly as Trio. The current public v0.2.0
-code remains a separate implementation. This page describes its actual
-features; it is not a claim that the ForgeHub integration is complete.
+Use this page to find the right workflow for your task. It describes the
+features available in v0.2.0, the commands that provide them, and where to find
+step-by-step instructions.
 
 ## Find the tool for your task
 
@@ -65,8 +64,6 @@ does not authorize a GitHub write. See [evidence and teams](USER_GUIDE.md).
 
 ## Current boundaries
 
-- The existing ForgeHub codebase has not received these upstream integrations.
-  Its CLI, settings, and state are distinct from current Trio.
 - GitHub inventory can include private account metadata, which stays local.
   Evidence datasets and contribution source require public repositories.
 - Core has no model client or automatic AI harness launcher. People or their
@@ -97,8 +94,8 @@ The **Vyral** query license notice is preserved through that public upstream
 code; this does not mean Vyral's entire application was integrated.
 
 See [source provenance](../third_party/source-manifest.json) and
-[third-party notices](../THIRD_PARTY_NOTICES.md). Integration of these
-capabilities into ForgeHub remains the outstanding product work.
+[third-party notices](../THIRD_PARTY_NOTICES.md) for the original projects and
+license details.
 
 ## Terminology
 

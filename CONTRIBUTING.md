@@ -29,9 +29,8 @@ caches, credentials, workstation paths, or assistant histories.
 Explain the concrete problem and resulting behavior. Include reproduction
 steps for a bug, or an example of the workflow a feature enables. Keep unrelated
 changes separate. Update the relevant guide and command catalog when behavior,
-arguments, effects, or defaults change. The current ForgeHub integration gap
-is recorded in [product scope](docs/PRODUCT_SCOPE.md); avoid presenting the
-separate current implementation as a completed shared codebase.
+arguments, effects, or defaults change. Keep descriptions consistent with the
+[product scope](docs/PRODUCT_SCOPE.md) and the behavior users can actually run.
 
 Preserve donor provenance, licenses, legitimate human credits, and upstream
 notices. Newly authored contributions are Apache-2.0. Choose the public Git

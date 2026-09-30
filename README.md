@@ -1,14 +1,13 @@
 # Trio
 
-Trio is intended to be the public-facing distribution of ForgeHub, enhanced
-with the selected upstream repositories. The goal is one shared codebase for
-contributors, maintainers, reviewers, and their agents.
+Trio is Greyforge's public GitHub toolkit for contributors, maintainers,
+reviewers, and their agents. It brings repository inventory, maintenance,
+validated contribution workflows, evidence search, and team review together
+in a local command-line application.
 
-**Current status:** the published v0.2.0 implementation is still separate from
-ForgeHub. The upstream components were integrated into Trio; integration into
-the existing ForgeHub codebase remains unfinished. This documentation describes
-the commands that work in the current public implementation. ForgeHub commands,
-settings, and databases are not interchangeable with Trio's.
+Start with a read-only inventory or evidence workflow, then configure the
+specific actions and approvals you need. The guides below cover the current
+v0.2.0 software, with examples and expected results.
 
 ## Start here
 
@@ -75,7 +74,7 @@ web interface are not implemented; see [feature boundaries](docs/FEATURES.md#cur
 
 ## More documentation
 
-[Scope and integration status](docs/PRODUCT_SCOPE.md) ·
+[Product scope](docs/PRODUCT_SCOPE.md) ·
 [Recovery](docs/RECOVERY.md) · [Security](SECURITY.md) ·
 [Contributing to the code](CONTRIBUTING.md) ·
 [Dependencies](docs/DEPENDENCIES.md) ·

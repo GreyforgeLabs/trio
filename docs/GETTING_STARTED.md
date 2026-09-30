@@ -3,9 +3,9 @@
 [Documentation home](../README.md) · [Feature guide](FEATURES.md) ·
 [Command reference](COMMAND_REFERENCE.md)
 
-This guide uses the current public Trio CLI. The intended product is enhanced
-ForgeHub with Trio as its public distribution; that codebase integration is
-still unfinished. Use ForgeHub's own guide for an existing ForgeHub installation.
+This guide takes you from installation to your first local workspace and
+repository inventory. Start without credentials to check your installation,
+then choose the workflow that matches your task.
 
 ## 1. Install
 
@@ -136,3 +136,32 @@ Quoted actor names such as `reviewer` are local roles you configure explicitly.
 | `BUDGET_TOO_SMALL` | Increase `--max-bytes`, or request a smaller selection. |
 
 Troubleshooting does not require deleting the database or enabling GitHub writes.
+
+## Frequently asked questions
+
+**Which package should I install?** Use this repository or its release artifacts.
+The distribution is `trio-triage`, the Python import is `trio_triage`, and the
+command is `trio`. The unrelated asynchronous Python package named `trio` does
+not provide this toolkit.
+
+**Can I use it without an AI subscription?** Yes. Trio has no built-in model
+client. You can supply patches and review decisions yourself, or use your chosen
+tool. No agent starts automatically.
+
+**What works offline?** Once evidence or inventory is saved, you can inspect
+local views, search indexed evidence, retrieve citations, review findings,
+coordinate groups, and prepare bundles or packets. Synchronization, acquisition,
+remote reconciliation, and publication need GitHub access. Sandbox validation
+runs offline with an image and tools already installed locally.
+
+**Will installing or initializing it change my repositories?** No. Installation
+sets up the CLI; initialization creates local state. GitHub writes require the
+specific configured policy, exact approval, suitable credentials, and fresh
+precondition checks described in the workflow guides.
+
+**Is there a browser interface?** The current interface is the CLI. Use `--json`
+for scripts and agents, or omit it for text output.
+
+**Can I reuse my existing ForgeHub configuration or database?** Use Trio's own
+initialization and guides. ForgeHub has a different CLI and state format;
+`migrate` is not a converter between them.

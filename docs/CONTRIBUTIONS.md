@@ -158,6 +158,24 @@ Plan creation itself checks the publication gate and seal. Configure the exact
 reviewed policy before planning; a later policy change invalidates approval.
 No gate or local role can grant GitHub permission or make a private source public.
 
+## Follow the publication flow
+
+```mermaid
+flowchart LR
+    A[Intake issue] --> B[Acquire exact source]
+    B --> C[Apply patch]
+    C --> D[Validate in sandbox]
+    D --> E[Create publication plan]
+    E --> F[Inspect and approve digest]
+    F --> G[Publish]
+    G --> H[Inspect or reconcile outcome]
+```
+
+The contribution ID follows the preparation steps. Plan creation returns a new
+publication plan ID; that is the ID used for approval, publication, and recovery.
+Validation failure stops the flow. A changed patch or base must pass validation
+again before a fresh plan can be approved.
+
 ## Walkthrough and expected results
 
 Follow the command examples above with your own values:
