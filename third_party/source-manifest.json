@@ -1043,6 +1043,46 @@
       "tests": [
         "Documentation link, command syntax, catalog coverage, JSON schema and offline workflow checks."
       ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/TRANCHE_WORKFLOW.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TRANCHE_WORKFLOW.md (independent compatibility implementation; official release reviews pending)",
+      "adaptation": "Independent interoperability and synthetic regression coverage; Tranche source remains a separately installed dependency",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/handoff.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TRANCHE_WORKFLOW.md (independent compatibility implementation; official release reviews pending)",
+      "adaptation": "Independent interoperability and synthetic regression coverage; Tranche source remains a separately installed dependency",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/tranche_export.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TRANCHE_WORKFLOW.md (independent compatibility implementation; official release reviews pending)",
+      "adaptation": "Independent interoperability and synthetic regression coverage; Tranche source remains a separately installed dependency",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/test_handoff.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TRANCHE_WORKFLOW.md (independent compatibility implementation; official release reviews pending)",
+      "adaptation": "Independent interoperability and synthetic regression coverage; Tranche source remains a separately installed dependency",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
     }
   ],
   "rights_review": "Exact independent review recorded in release attestation; source metadata does not grant approval",
