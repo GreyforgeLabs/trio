@@ -35,7 +35,13 @@ def parser():
     for x in f.values():selection(x)
     opt(f["build"],"--replace",action="store_true")
     x=top("search");selection(x);opt(x,"--query",required=True);opt(x,"--mode",choices=["ranked","literal"],default="ranked");opt(x,"--cursor");opt(x,"--max-tokens",type=int);opt(x,"--tokenizer-encoding",choices=["cl100k_base","o200k_base"]);opt(x,"--tokenizer-asset")
-    x=top("retrieve");opt(x,"--ref",required=True);opt(x,"--window",type=int,default=4096);opt(x,"--max-tokens",type=int);opt(x,"--tokenizer-encoding",choices=["cl100k_base","o200k_base"]);opt(x,"--tokenizer-asset")
+    x=top("retrieve")
+    opt(x,"--ref",required=True)
+    opt(x,"--window",type=int,default=4096)
+    opt(x,"--byte-offset",type=int,help="UTF-8 byte offset relative to the cited source boundary")
+    opt(x,"--max-tokens",type=int)
+    opt(x,"--tokenizer-encoding",choices=["cl100k_base","o200k_base"])
+    opt(x,"--tokenizer-asset")
     f=family("evidence",["show"]);opt(f["show"],"--ref",required=True)
     x=top("similar");dataset(x);opt(x,"--snapshot",required=True)
     f=family("group",["create","update","show"])
@@ -187,7 +193,7 @@ def run(a,p):
         return search.query(a.dataset,selection,a.query,mode=a.mode,max_bytes=a.max_bytes,max_tokens=a.max_tokens,cursor=a.cursor)
     if command in ("retrieve","evidence show"):
         ref=read_json(a.ref)
-        return search.retrieve(ref,max_bytes=a.max_bytes,max_tokens=getattr(a,"max_tokens",None),window=getattr(a,"window",4096))
+        return search.retrieve(ref,max_bytes=a.max_bytes,max_tokens=getattr(a,"max_tokens",None),window=getattr(a,"window",4096),byte_offset=getattr(a,"byte_offset",None))
     if command=="similar":
         from .contracts import strict_json
         manifest=ev.snapshot(a.dataset,a.snapshot);items=[];source=ev.source(a.dataset)

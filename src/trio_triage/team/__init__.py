@@ -22,18 +22,50 @@ def screen(value):
             for child in item:inspect(child)
     inspect(value)
 
+class _EventView:
+    """Indexes for one read operation; never cached across ledger mutations."""
+
+    def __init__(self, events):
+        self.by_id = {}
+        self.by_entity = {}
+        self.reviews = {}
+        self.withdrawals = {}
+        for event in events:
+            self.by_id[event["event_id"]] = event
+            self.by_entity.setdefault(event["entity_id"], []).append(event)
+            if event["operation"] == "review":
+                self.reviews.setdefault(event["payload"]["finding_id"], []).append(
+                    event
+                )
+            elif event["operation"] == "withdraw-review":
+                self.withdrawals.setdefault(event["payload"]["review_id"], []).append(
+                    event
+                )
+        self.heads = {}
+        for entity, history in self.by_entity.items():
+            parents = {p for event in history for p in event["parents"]}
+            self.heads[entity] = sorted(
+                event["event_id"]
+                for event in history
+                if event["event_id"] not in parents
+            )
+
 class TeamService:
     def __init__(self,store):self.store=store;store.require()
     def events(self):
         with self.store.db() as db:return [json.loads(r[0]) for r in db.execute("SELECT data FROM events ORDER BY id")]
     def heads(self,entity):
-        events=[e for e in self.events() if e["entity_id"]==entity];parents={p for e in events for p in e["parents"]}
+        with self.store.db() as db:
+            events=[json.loads(r[0]) for r in db.execute("SELECT data FROM events WHERE entity=? ORDER BY id",(entity,))]
+        parents={p for e in events for p in e["parents"]}
         return sorted(e["event_id"] for e in events if e["event_id"] not in parents)
+    def _view(self):return _EventView(self.events())
+    def _with_trust(self,event):
+        return {**event,"trust":"locally-recorded" if event.get("local_origin")==self.store.config["installation_id"] and self.store.config["installation_id"] else "claimed"}
     def get(self,event_id):
         with self.store.db() as db:row=db.execute("SELECT data FROM events WHERE id=?",(event_id,)).fetchone()
         if not row:raise TrioError("EVIDENCE_MISSING")
-        e=json.loads(row[0]);e["trust"]="locally-recorded" if e.get("local_origin")==self.store.config["installation_id"] and self.store.config["installation_id"] else "claimed"
-        return e
+        return self._with_trust(json.loads(row[0]))
     def append(self,entity,operation,payload,actor,parents=None,refs=None):
         role="reviewer" if operation in ("review","withdraw-review") else "maintainer" if operation in ("resolve","review-resolution") else "contributor"
         self.store.role(actor,role)
@@ -58,13 +90,14 @@ class TeamService:
             db.execute("INSERT INTO events VALUES(?,?,?)",(e["event_id"],entity,canonical(stored).decode()))
         return {**stored,"trust":"locally-recorded"}
     def status(self):
-        events=self.events();entities=sorted({e["entity_id"] for e in events})
-        conflicts=[{"entity":e,"heads":self.heads(e)} for e in entities if len(self.heads(e))>1]
+        view=self._view()
+        conflicts=[{"entity":entity,"heads":view.heads[entity]} for entity in sorted(view.heads) if len(view.heads[entity])>1]
         from ..triage import TriageService
-        for entity in {e["entity_id"] for e in events if e["operation"]=="finding"}:
-            finding=TriageService(self.store).show(entity)
+        triage=TriageService(self.store)
+        for entity in sorted({e["entity_id"] for e in view.by_id.values() if e["operation"]=="finding"}):
+            finding=triage._show(entity,view)
             if finding["review_conflict"]:conflicts.append({"entity":entity,"review_heads":[r["event_id"] for r in finding["reviews"] if r["state"]=="current"]})
-        return {"schema":"trio.team-status/v1","events":len(events),"conflicts":conflicts,"trust":"local roles do not authenticate imported attribution"}
+        return {"schema":"trio.team-status/v1","events":len(view.by_id),"conflicts":conflicts,"trust":"local roles do not authenticate imported attribution"}
     def export(self,path=None,ids=None,approve=False):
         if ids is None:raise TrioError("EXPLICIT_SELECTION_REQUIRED",exit_code=2)
         selected=[e for e in self.events() if e["event_id"] in ids]

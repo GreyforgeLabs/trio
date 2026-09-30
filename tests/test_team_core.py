@@ -51,6 +51,58 @@ class CoreTests(unittest.TestCase):
         updated=TriageService(self.store).propose("different_cause",self.items,self.refs,"Changed judgment", "alice",finding_id=first["entity_id"],parents=[first["event_id"]])
         self.assertNotEqual(first["payload"]["decision_digest"],updated["payload"]["decision_digest"])
         self.assertEqual(TriageService(self.store).show(first["entity_id"])["reviews"][0]["state"],"stale")
+
+    def test_status_uses_one_ledger_read_including_finding_reviews(self):
+        triage = TriageService(self.store)
+        team = TeamService(self.store)
+        conflicted = self.finding()
+        entity = conflicted["entity_id"]
+        decision = conflicted["payload"]["decision_digest"]
+        approve = triage.review(entity, decision, "approve", "alice")
+        reject = triage.review(entity, decision, "reject", "bob")
+        for _ in range(5):
+            finding = self.finding()
+            triage.review(
+                finding["entity_id"],
+                finding["payload"]["decision_digest"],
+                "approve",
+                "alice",
+            )
+        for _ in range(100):
+            triage.group([], "alice")
+        before = state(self.store.root)
+        original = TeamService.events
+        with patch.object(
+            TeamService, "events", autospec=True, side_effect=original
+        ) as reads:
+            status = team.status()
+        self.assertEqual(reads.call_count, 1)
+        self.assertEqual(status["events"], 113)
+        self.assertEqual(
+            status["conflicts"],
+            [
+                {
+                    "entity": entity,
+                    "review_heads": sorted([approve["event_id"], reject["event_id"]]),
+                }
+            ],
+        )
+        self.assertEqual(before, state(self.store.root))
+        triage.withdraw(reject["event_id"], "bob")
+        self.assertEqual(team.status()["events"], 114)
+        self.assertEqual(team.status()["conflicts"], [])
+
+    def test_scoped_heads_only_decode_selected_entity(self):
+        team = TeamService(self.store)
+        triage = TriageService(self.store)
+        group = triage.group([], "alice")
+        for _ in range(20):
+            triage.group([], "alice")
+        with patch("trio_triage.team.json.loads", wraps=json.loads) as decoded:
+            heads = team.heads(group["entity_id"])
+        self.assertEqual(heads, [group["event_id"]])
+        self.assertEqual(decoded.call_count, 1)
+
     def test_competing_group_edits_remain_conflicts(self):
         original=TriageService(self.store).group(self.items,"alice")
         TeamService(self.other).import_bundle_data(TeamService(self.store).export(ids=[original["event_id"]]))

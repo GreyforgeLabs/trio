@@ -609,6 +609,125 @@ class ProductEvidenceSearchTests(unittest.TestCase):
         self.assertLessEqual(out["budget"]["used_bytes"],3000)
         self.assertEqual(self.ev.resolve_ref(fragment["ref"])["text"],fragment["excerpt"]["text"])
 
+    def test_cli_retrieval_continues_verified_utf8_source(self):
+        from trio_triage.catalog import catalog
+        from trio_triage.cli import main, parser
+        from trio_triage.storage import atomic_json
+
+        ref = self.ref()
+        refpath = Path(self.temp.name) / "selected-ref.json"
+        atomic_json(refpath, ref)
+        before = self.state_bytes()
+
+        def page(*options):
+            stream = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+            with (
+                contextlib.redirect_stdout(stream),
+                patch("socket.socket", side_effect=AssertionError("offline retrieval")),
+            ):
+                code = main(
+                    [
+                        "--home",
+                        str(self.store.root),
+                        "retrieve",
+                        "--ref",
+                        str(refpath),
+                        "--window",
+                        "80",
+                        "--json",
+                        *options,
+                    ]
+                )
+            stream.flush()
+            return code, json.loads(stream.buffer.getvalue())
+
+        code, first = page()
+        self.assertEqual(code, 0)
+        prior = first["items"][0]["fragments"][0]
+        code, second = page("--byte-offset", str(prior["continuation"]["byte_offset"]))
+        self.assertEqual(code, 0)
+        following = second["items"][0]["fragments"][0]
+        self.assertEqual(following["excerpt"]["start"], prior["excerpt"]["end"])
+        self.assertNotEqual(
+            following["ref"]["excerpt_sha256"], prior["ref"]["excerpt_sha256"]
+        )
+        for response in (first, second):
+            fragment = response["items"][0]["fragments"][0]
+            self.assertEqual(
+                self.ev.resolve_ref(fragment["ref"])["text"],
+                fragment["excerpt"]["text"],
+            )
+            self.assertEqual(
+                len((canonical(response) + "\n").encode()),
+                response["budget"]["used_bytes"],
+            )
+        source = self.ev.resolve_ref(ref)["text"].encode()
+        # The selected excerpt contains a two-byte accented character.
+        split = (
+            ref["locator"]["start"]
+            - ref["locator"]["boundary_start"]
+            + source.index("é".encode())
+            + 1
+        )
+        for invalid in (
+            -1,
+            split,
+            ref["locator"]["boundary_end"] - ref["locator"]["boundary_start"],
+        ):
+            code, error = page("--byte-offset", str(invalid))
+            self.assertNotEqual(code, 0)
+            self.assertEqual(error["error"]["code"], "EVIDENCE_CORRUPT")
+        retrieve = next(
+            x for x in catalog(parser(),command="retrieve")["leaves"] if x["command"] == "retrieve"
+        )
+        self.assertTrue(
+            any("--byte-offset" in x["flags"] for x in retrieve["arguments"])
+        )
+        self.assertEqual(before, self.state_bytes())
+
+    def test_index_admission_counts_overlapping_roots_once(self):
+        self.store.config["index_max_bytes"] = 1048576
+        for root in (
+            self.store.root / "cache",
+            Path(self.temp.name) / "external-cache",
+            Path(self.temp.name),
+        ):
+            with self.subTest(cache=root):
+                self.store.cache_root = root
+                if root == self.store.root / "cache":
+                    usage = self.ev._usage(self.store.root)
+                elif root == Path(self.temp.name):
+                    usage = self.ev._usage(root)
+                else:
+                    usage = self.ev._usage(self.store.root) + self.ev._usage(root)
+                ceiling = (
+                    usage
+                    + self.store.config["index_max_bytes"]
+                    + self.store.config["reserve_bytes"]
+                )
+                self.store.config["state_max_bytes"] = ceiling
+                self.search.build(self.dataset, self.snapshot, replace=True)
+                path = self.search._path(self.dataset, self.snapshot)
+                original = path.read_bytes()
+                usage = self.ev._usage_union(root, self.store.root)
+                self.store.config["state_max_bytes"] = (
+                    usage
+                    + self.store.config["index_max_bytes"]
+                    + self.store.config["reserve_bytes"]
+                    - 1
+                )
+                with self.assertRaises(TrioError) as error:
+                    self.search.build(self.dataset, self.snapshot, replace=True)
+                self.assertEqual(error.exception.code, "RESOURCE_LIMIT")
+                self.assertEqual(original, path.read_bytes())
+
+    def test_overlapping_usage_still_refuses_symlinks(self):
+        link = Path(self.temp.name) / "cache-link"
+        link.symlink_to(self.store.root / "cache", target_is_directory=True)
+        with self.assertRaises(TrioError) as error:
+            self.ev._usage_union(self.store.root, link)
+        self.assertEqual(error.exception.code, "SCOPE_DENIED")
+
     def test_sensitive_output_and_cursor_do_not_skip_unemitted_safe_item(self):
         # Direct boundary fixture controls ranking so the sensitive third item does not skip the second.
         query=self.query(max_bytes=25000);items=query["items"][:3]
