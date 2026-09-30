@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools==80.9.0", "wheel==0.45.1"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "trio-triage"
+version = "0.1.0"
+description = "Local-first public repository evidence and team triage"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0 AND MIT"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "licenses/*.txt"]
+dependencies = []
+[project.optional-dependencies]
+tokens = ["tiktoken==0.14.0", "requests==2.34.2", "charset-normalizer==3.5.2", "idna==3.20", "urllib3==2.8.0", "certifi==2026.7.22", "regex==2026.9.29"]
+[project.scripts]
+trio = "trio_triage.cli:main"
+[tool.setuptools.packages.find]
+where = ["src"]
+[tool.setuptools.package-data]
+trio_triage = ["py.typed", "data/*.json"]

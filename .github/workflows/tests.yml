@@ -1,0 +1,27 @@
+name: Public synthetic checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install reviewed build tools
+        run: python -m pip install --require-hashes -r build-requirements.lock
+      - name: Install hash-verified maintained offline scanner
+        run: python scripts/install_public_scanner.py --output /tmp/trio-gitleaks
+      - name: Synthetic offline unit and integration tests
+        env:
+          PYTHONPATH: src
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -m unittest discover -s tests -v
+      - name: Stage exact reviewed source
+        run: python -c "import sys; sys.path.insert(0, 'scripts'); from check_publication import stage_source, read_object; stage_source('.', read_object('third_party/source-allowlist.json'), '/tmp/trio-ci-source')"
+      - name: Allowlist and public provenance
+        run: python /tmp/trio-ci-source/scripts/check_publication.py --source /tmp/trio-ci-source --allowlist /tmp/trio-ci-source/third_party/source-allowlist.json --source-manifest /tmp/trio-ci-source/third_party/source-manifest.json --scanner /tmp/trio-gitleaks --scanner-policy /tmp/trio-ci-source/scripts/secret-scanner-policy.json

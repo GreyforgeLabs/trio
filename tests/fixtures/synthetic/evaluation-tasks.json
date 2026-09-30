@@ -1,0 +1,1 @@
+[{"id":"synthetic-title","query":"Terminal","expected_items":[1,2,3,4]},{"id":"synthetic-body","query":"Different causes","expected_items":[1,2,3,4]},{"id":"synthetic-no-hit","query":"nonexistentfruitword","expected_items":[]}]

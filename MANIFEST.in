@@ -1,0 +1,13 @@
+include build-requirements.lock tokens-requirements.lock
+include LICENSE NOTICE THIRD_PARTY_NOTICES.md README.md pyproject.toml MANIFEST.in CONTRIBUTING.md SECURITY.md AGENTS.md
+recursive-include licenses *.txt
+recursive-include third_party *.json
+recursive-include docs *.md *.json
+recursive-include scripts *.py *.json
+recursive-include tests *.py *.json
+recursive-include src *.py *.typed *.json
+exclude docs/PUBLIC_INTEGRATION_SPEC.md
+recursive-exclude * __pycache__ *.pyc *.sqlite *.db *.log
+
+include .gitignore
+recursive-include .github *.md *.yml *.yaml

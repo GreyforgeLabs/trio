@@ -1,0 +1,6 @@
+# Recovery and migration
+Interrupted evidence publication can leave unreferenced complete objects; manifests never intentionally reference incomplete bytes. Capture checkpoints retain partial coverage and frozen corpus membership. Index replacement publishes atomically and retains the previous complete view on failure. Team imports are validated before transactional insertion and repeated imports are idempotent. Atomic packet exports replace only complete files.
+
+Action journals persist intent before each effect; a crash after dispatch leaves unknown outcome and requires explicit read-only reconciliation. Never replay uncertain POST/PATCH. Comment then state transition is not atomic; each outcome remains visible. Local replay protection does not span independent installations. Publisher handover with unresolved operations refuses.
+
+`migrate` rehearses on a disposable copy and explicit `--apply` retains a checksum-verified backup. Version 1 currently needs no migration. Future or foreign schemas refuse. Schema rollback cannot lower versions or erase action journals. `maintenance indexes` previews deletion; only `--apply` removes explicitly selected disposable indexes. Evidence retention is never automatic.

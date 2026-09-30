@@ -1,0 +1,4 @@
+# Dependency review
+Core runtime uses Python 3.12 standard library and SQLite FTS5 only. Build dependencies are pinned setuptools 80.9.0 and wheel 0.45.1, reviewed public packaging tools. Optional tiktoken 0.14.0 is explicit, never auto-installed; encoding download is prohibited in query execution. Its public dependency closure must be installed from the reviewed hash lock before use. Secret scanning uses separately pinned maintained offline scanner tooling; a structural scan is not a confidentiality approval.
+
+Optional closure pins urllib3 2.8.0 rather than affected 2.5.0; review sources: https://github.com/urllib3/urllib3/security/advisories . Public version metadata queried September 30, 2026. Exact CPython3.12 Linux wheel SHA256 values and transitive metadata are in third_party/dependency-lock.json; build and optional install locks are separate. Other platforms require a separately reviewed wheel lock.

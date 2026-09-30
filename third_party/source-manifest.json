@@ -1,0 +1,901 @@
+{
+  "schema": "trio.source-manifest/v1",
+  "approved_public_inputs": [
+    {
+      "repository": "https://github.com/EFrMG/triage-o-mator",
+      "commit": "d329d6a4a738900e7dec15930635efe8298b6c47"
+    },
+    {
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94"
+    }
+  ],
+  "files": [
+    {
+      "origin": "newly-authored",
+      "destination": ".github/ISSUE_TEMPLATE/bug.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": ".github/workflows/tests.yml",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": ".gitignore",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "AGENTS.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "CONTRIBUTING.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "imported",
+      "destination": "LICENSE",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Preserved public license text; no identity inferred",
+      "tests": [
+        "tests/test_publication.py"
+      ],
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "licenses/Vyral-Apache-2.0.txt",
+      "source_sha256": "4969f597f8e73d725c6109beb3fffe5157e5ca85ed7668d138de90e8d91d7ab8",
+      "source_git_blob": "985c91b3ec3be198903180cda34ca80749f00acb"
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "MANIFEST.in",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "NOTICE",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "README.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "SECURITY.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "THIRD_PARTY_NOTICES.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "build-requirements.lock",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/ACTIONS.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/DEPENDENCIES.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/EVALUATION.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/IMPLEMENTATION_AUDIT.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/PUBLICATION.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/RECOVERY.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/TECHNICAL_REVIEW.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/USER_GUIDE.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "imported",
+      "destination": "licenses/Reposition-MIT.txt",
+      "license": "MIT",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Preserved public license text; no identity inferred",
+      "tests": [
+        "tests/test_publication.py"
+      ],
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "LICENSE",
+      "source_sha256": "763518c0d8cf777bef7bf9190eec4bc4a90ae1ee2fd68f8f4fe3442cb6f5f95b",
+      "source_git_blob": "fc0165b1f9281922657814812959e153fc86eeb1"
+    },
+    {
+      "origin": "imported",
+      "destination": "licenses/Vyral-Apache-2.0.txt",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Preserved public license text; no identity inferred",
+      "tests": [
+        "tests/test_publication.py"
+      ],
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "licenses/Vyral-Apache-2.0.txt",
+      "source_sha256": "4969f597f8e73d725c6109beb3fffe5157e5ca85ed7668d138de90e8d91d7ab8",
+      "source_git_blob": "985c91b3ec3be198903180cda34ca80749f00acb"
+    },
+    {
+      "origin": "imported",
+      "destination": "licenses/triage-o-mator-MIT.txt",
+      "license": "MIT",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Preserved public license text; no identity inferred",
+      "tests": [
+        "tests/test_publication.py"
+      ],
+      "repository": "https://github.com/EFrMG/triage-o-mator",
+      "commit": "d329d6a4a738900e7dec15930635efe8298b6c47",
+      "original_path": "LICENSE",
+      "source_sha256": "edeaecf44089d2ac246d489fdb9b759d849b09b3a9b918bd6b400a251a51bdce",
+      "source_git_blob": "92e4f1db3a9a0117c26360937f6e5cbfa94f362c"
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "pyproject.toml",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "scripts/build_public_artifacts.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "scripts/check_publication.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "scripts/evaluate.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "scripts/install_public_scanner.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "scripts/secret-scanner-policy.json",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/__init__.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/actions/__init__.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/actions/service.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/catalog.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/cli.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/config.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/EFrMG/triage-o-mator",
+      "commit": "d329d6a4a738900e7dec15930635efe8298b6c47",
+      "original_path": "bin/_evidence.py",
+      "source_sha256": "09c61d2715c3f3aef9eeffe2cd8873a52d87d1ff06f7549086bf5699e0582c84",
+      "destination": "src/trio_triage/contracts.py",
+      "license": "MIT (donor) and Apache-2.0 (new enrollment helpers)",
+      "adaptation": "Remove installation-specific repository regex import and consolidate canonical validator; add public scope checks",
+      "tests": [
+        "tests/test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/EFrMG/triage-o-mator",
+          "commit": "d329d6a4a738900e7dec15930635efe8298b6c47",
+          "original_path": "bin/_evidence.py",
+          "source_sha256": "09c61d2715c3f3aef9eeffe2cd8873a52d87d1ff06f7549086bf5699e0582c84",
+          "license": "MIT (donor) and Apache-2.0 (new enrollment helpers)",
+          "adaptation": "Remove installation-specific repository regex import and consolidate canonical validator; add public scope checks"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "9756ad847db9f9e63e5a927a89daa8048ee16890"
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/errors.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "adapted",
+      "destination": "src/trio_triage/evaluation.py",
+      "license": "MIT AND Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Selected public strings/first_match primitives; independently authored synthetic harness orchestration, no upstream setup or instructions executed",
+      "tests": [
+        "tests/test_team_core.py"
+      ],
+      "repository": "https://github.com/EFrMG/triage-o-mator",
+      "commit": "d329d6a4a738900e7dec15930635efe8298b6c47",
+      "original_path": "bin/_search.py",
+      "source_sha256": "2e7d2430309e7b9596eb4517195d425058eca35ea9c951d0b56969e4fdd8f96d",
+      "source_git_blob": "a175f7485c80dbb1b4335af19fff1f4a46644f2a"
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/evidence/__init__.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/EFrMG/triage-o-mator",
+      "commit": "d329d6a4a738900e7dec15930635efe8298b6c47",
+      "original_path": "bin/_pr_evidence.py",
+      "source_sha256": "7e25f016b3feb31894fa8739e88863ea7e82f7f820336ecfdb00380cedc26acc",
+      "destination": "src/trio_triage/evidence/pr_components.py",
+      "license": "MIT",
+      "adaptation": "Incorporate fixed read-only PR source collectors; exclude shell auth,install globals and parallel CLI; require public visibility on linked GraphQL repository",
+      "tests": [
+        "tests/test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/EFrMG/triage-o-mator",
+          "commit": "d329d6a4a738900e7dec15930635efe8298b6c47",
+          "original_path": "bin/_pr_evidence.py",
+          "source_sha256": "7e25f016b3feb31894fa8739e88863ea7e82f7f820336ecfdb00380cedc26acc",
+          "license": "MIT",
+          "adaptation": "Incorporate fixed read-only PR source collectors; exclude shell auth,install globals and parallel CLI; require public visibility on linked GraphQL repository"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "e7fb057f994af04c16d14c401014e63d369d8400"
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/EFrMG/triage-o-mator",
+      "commit": "d329d6a4a738900e7dec15930635efe8298b6c47",
+      "original_path": "bin/_acquire.py",
+      "source_sha256": "b7ae0622db302c4017fa8d9cdfeddc6e2b608c5fa25e01700f2878bdc2b65f5f",
+      "destination": "src/trio_triage/evidence/read_contract.py",
+      "license": "MIT",
+      "adaptation": "Incorporate fixed read-only PR source collectors; exclude shell auth,install globals and parallel CLI; fixed query asks repository isPrivate for public scope enforcement",
+      "tests": [
+        "tests/test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/EFrMG/triage-o-mator",
+          "commit": "d329d6a4a738900e7dec15930635efe8298b6c47",
+          "original_path": "bin/_acquire.py",
+          "source_sha256": "b7ae0622db302c4017fa8d9cdfeddc6e2b608c5fa25e01700f2878bdc2b65f5f",
+          "license": "MIT",
+          "adaptation": "Incorporate fixed read-only PR source collectors; exclude shell auth,install globals and parallel CLI; fixed query asks repository isPrivate for public scope enforcement"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "38b09459d88dce86bb9c594c0b028c49295abb4e"
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/evidence/service.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/identity.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/packets/__init__.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/py.typed",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/search/__init__.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "src/reposition/cache_index.py",
+      "source_sha256": "d933f4605b40869a3c4e5331c829659d04537f4e3ea53a8c7865d51698cc224e",
+      "destination": "src/trio_triage/search/cache_index.py",
+      "license": "MIT",
+      "adaptation": "Canonical TRIO contract import and local service integration; query carries upstream Apache notice; new TRIO SQLite application identity, index artifact, service schemas and command diagnostics",
+      "tests": [
+        "tests/test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/Univeracity/reposition",
+          "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+          "original_path": "src/reposition/cache_index.py",
+          "source_sha256": "d933f4605b40869a3c4e5331c829659d04537f4e3ea53a8c7865d51698cc224e",
+          "license": "MIT",
+          "adaptation": "Canonical TRIO contract import and local service integration; query carries upstream Apache notice; new TRIO SQLite application identity, index artifact, service schemas and command diagnostics"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "9f4321bc5124dcf9e690ede14724fb2c0eb6bda9"
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "src/reposition/cache_source.py",
+      "source_sha256": "8407ede3c03a9d5dc1e7975bd8118272a5846c10f33ad70fb4e25ca35983b8d8",
+      "destination": "src/trio_triage/search/cache_source.py",
+      "license": "MIT",
+      "adaptation": "Canonical TRIO contract import and local service integration; query carries upstream Apache notice",
+      "tests": [
+        "tests/test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/Univeracity/reposition",
+          "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+          "original_path": "src/reposition/cache_source.py",
+          "source_sha256": "8407ede3c03a9d5dc1e7975bd8118272a5846c10f33ad70fb4e25ca35983b8d8",
+          "license": "MIT",
+          "adaptation": "Canonical TRIO contract import and local service integration; query carries upstream Apache notice"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "b61a7deaa48f7175e417b518c5480bb7f231f902"
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "src/reposition/models.py",
+      "source_sha256": "d9647f2a4bdffeccbc86a28cfe4eb3d2737165f41d967397738fd315bb92bc85",
+      "destination": "src/trio_triage/search/models.py",
+      "license": "MIT",
+      "adaptation": "Extract only canonical hashing or match span required by cache index; exclude normalized-input/render extra paths",
+      "tests": [
+        "tests/test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/Univeracity/reposition",
+          "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+          "original_path": "src/reposition/models.py",
+          "source_sha256": "d9647f2a4bdffeccbc86a28cfe4eb3d2737165f41d967397738fd315bb92bc85",
+          "license": "MIT",
+          "adaptation": "Extract only canonical hashing or match span required by cache index; exclude normalized-input/render extra paths"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "fa8f6bddee78caf259ccafdba0c3a7054fa167d4"
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "src/reposition/projections.py",
+      "source_sha256": "c33907d9bb4281f952151f43141f9ea4bc117fdc4e9ef6cd60983ccb0174c0d7",
+      "destination": "src/trio_triage/search/projections.py",
+      "license": "MIT",
+      "adaptation": "Canonical TRIO contract import and local service integration; query carries upstream Apache notice",
+      "tests": [
+        "tests/test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/Univeracity/reposition",
+          "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+          "original_path": "src/reposition/projections.py",
+          "source_sha256": "c33907d9bb4281f952151f43141f9ea4bc117fdc4e9ef6cd60983ccb0174c0d7",
+          "license": "MIT",
+          "adaptation": "Canonical TRIO contract import and local service integration; query carries upstream Apache notice"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "5d466f1b004bdf8c9af40cee4b06ea71e86c0796"
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "src/reposition/query.py",
+      "source_sha256": "ebaa44b9e6adf8809b3df9c1835a55e5174da59f32ed4bba04ed9d2f454893a6",
+      "destination": "src/trio_triage/search/query.py",
+      "license": "Apache-2.0",
+      "adaptation": "Canonical TRIO contract import and local service integration; query carries upstream Apache notice",
+      "tests": [
+        "tests/test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/Univeracity/reposition",
+          "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+          "original_path": "src/reposition/query.py",
+          "source_sha256": "ebaa44b9e6adf8809b3df9c1835a55e5174da59f32ed4bba04ed9d2f454893a6",
+          "license": "Apache-2.0",
+          "adaptation": "Canonical TRIO contract import and local service integration; query carries upstream Apache notice"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "d510aedd2d7426ca83ff1b24a9756f8ef1d80972"
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "src/reposition/render.py",
+      "source_sha256": "bd2732fcf073d13d9fd78bbda963e3add3d7dd93ed246e2c05bdf4928f494794",
+      "destination": "src/trio_triage/search/render.py",
+      "license": "MIT",
+      "adaptation": "Extract only canonical hashing or match span required by cache index; exclude normalized-input/render extra paths",
+      "tests": [
+        "tests/test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/Univeracity/reposition",
+          "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+          "original_path": "src/reposition/render.py",
+          "source_sha256": "bd2732fcf073d13d9fd78bbda963e3add3d7dd93ed246e2c05bdf4928f494794",
+          "license": "MIT",
+          "adaptation": "Extract only canonical hashing or match span required by cache index; exclude normalized-input/render extra paths"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "133a8de06a42f108712371aedf3a35e029cf73f4"
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/search/service.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/search/tokenizer.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/storage/__init__.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/team/__init__.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/transport.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/triage/__init__.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/fixtures/synthetic/evaluation-tasks.json",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/test_actions.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/test_boundaries.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "adapted",
+      "repository": "https://github.com/Univeracity/reposition",
+      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+      "original_path": "src/reposition/_demo_cache.py",
+      "source_sha256": "d8897024c47ad4116632309ad00ab701a85f461a7223087743b82ff0ab14dd7e",
+      "destination": "tests/test_evidence_search.py",
+      "license": "MIT",
+      "adaptation": "Reviewed minimal synthetic fixture functions; omit donor executable demo",
+      "tests": [
+        "python -m unittest discover -s tests -p test_evidence_search.py"
+      ],
+      "sources": [
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/Univeracity/reposition",
+          "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+          "original_path": "src/reposition/_demo_cache.py",
+          "source_sha256": "d8897024c47ad4116632309ad00ab701a85f461a7223087743b82ff0ab14dd7e",
+          "license": "MIT",
+          "adaptation": "Reviewed minimal synthetic fixture functions; omit donor executable demo"
+        },
+        {
+          "origin": "adapted",
+          "repository": "https://github.com/Univeracity/reposition",
+          "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
+          "original_path": "tests/test_cache.py",
+          "source_sha256": "c2cbc13a18b100b3cb001c97080aac493d937cc74ca69df2d0555e16158c3c1a",
+          "license": "MIT",
+          "adaptation": "Port donor cache/index/projection/retrieval tests to incorporated services; omit donor separate CLI test"
+        }
+      ],
+      "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
+      "source_git_blob": "3f542576194af834a7c1f42d343e62af3040c342"
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/test_publication.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/test_team_core.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "third_party/dependency-lock.json",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "third_party/source-allowlist.json",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "third_party/source-manifest.json",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tokens-requirements.lock",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
+      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "third_party/artifact-allowlists.json",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md (expected release members reviewed; independent publication reviews pending)",
+      "adaptation": "Explicit reviewed source paths and known pinned-backend metadata, not observed artifact contents",
+      "tests": [
+        "tests/test_publication.py"
+      ]
+    }
+  ],
+  "rights_review": "PENDING independent public source-rights reviewer",
+  "publication_approved": false
+}

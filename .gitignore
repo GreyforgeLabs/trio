@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.sqlite
+*.db
+build/
+dist/
+*.egg-info/
+.venv/
+docs/PUBLIC_INTEGRATION_SPEC.md

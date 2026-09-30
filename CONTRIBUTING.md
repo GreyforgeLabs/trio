@@ -1,0 +1,2 @@
+# Contributing
+Use public sources and synthetic fixtures only. Preserve donor provenance and licenses. Do not add private repositories, live caches, credentials, workstation paths, or assistant histories. Run `python -m unittest discover -s tests -v` and publication checks before proposing changes. Newly authored contributions are Apache-2.0; public contributor identities must be explicitly chosen. No AI authorship trailers are required. Publication approvals are separate and pending.
