@@ -61,7 +61,7 @@ class SearchService:
                 # Include both old and staged replacement in admission; source is never evicted.
                 self.evidence._admit(dataset,self.store.config["index_max_bytes"])
                 root=getattr(self.store,"cache_root",self.store.root/"cache")
-                if self.evidence._usage(root)+self.evidence._usage(self.store.root)+self.store.config["index_max_bytes"]+self.store.config["reserve_bytes"]>self.store.config["state_max_bytes"]:raise TrioError("RESOURCE_LIMIT")
+                if self.evidence._usage_union(root,self.store.root)+self.store.config["index_max_bytes"]+self.store.config["reserve_bytes"]>self.store.config["state_max_bytes"]:raise TrioError("RESOURCE_LIMIT")
                 result=CacheIndex.build(source,path,**chosen,components=components,max_index_bytes=self.store.config["index_max_bytes"],max_units=self.store.config["projection_max_units"],replace=replace,recover=recover)
             result.update(schema="trio.index-build/v1",dataset=dataset)
             return result

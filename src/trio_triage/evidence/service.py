@@ -92,6 +92,19 @@ class EvidenceService:
         if shutil.disk_usage(self.store.root).free < amount + reserve:
             raise TrioError("RESOURCE_LIMIT")
 
+    def _usage_union(self, *roots):
+        """Count nested state/cache trees once, retaining symlink refusals."""
+        selected = set()
+        for root in roots:
+            root = Path(root).absolute()
+            if any(p.is_symlink() for p in (root, *root.parents)):
+                raise TrioError("SCOPE_DENIED")
+            selected.add(root.resolve())
+        outermost = [root for root in selected if not any(
+            root != other and root.is_relative_to(other) for other in selected
+        )]
+        return sum(self._usage(root) for root in outermost)
+
     def enroll(self, scope):
         scope = c.validate_scope(scope)
         identity = dict(host=scope["host"], full_name=scope["full_name"], database_id=scope["repository_id"], node_id=None)
