@@ -1,5 +1,7 @@
 Trio triage toolkit
 Newly authored portions are licensed under Apache License 2.0. Public release publisher: Greyforge Labs; contact@greyforge.tech. Independent review services are separate from code authorship.
 Portions incorporate Reposition, Copyright 2026 Jeremy Dixon (MIT), and triage-o-mator, Copyright (c) 2026 EFrMG (MIT).
+triage-o-mator author: Erwin Francisco Macias Ghiglione (EFrMG); original repository https://github.com/EFrMG/triage-o-mator .
+Reposition author: Jeremy Dixon (Univeracity); original repository https://github.com/Univeracity/reposition .
 The incorporated query policy derives from Vyral, Copyright 2026 Jeremy Dixon, Apache License 2.0; original source https://github.com/Univeracity/vyral/commit/77c03edbf59a360fbe2168200bdc2153c7958fed . Applicable notices and modifications are retained in the source and licenses/.
 No donor branding or glyph artwork is included. Upstream attribution implies no endorsement.

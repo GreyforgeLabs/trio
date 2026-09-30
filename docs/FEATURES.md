@@ -88,9 +88,12 @@ does not authorize a GitHub write. See [evidence and teams](USER_GUIDE.md).
 
 The public source manifest records the precise upstream paths, commits,
 hashes, adaptations, and licenses. The current implementation incorporates
-public evidence/acquisition contracts from **triage-o-mator** and cache,
-projection, indexing, search, and retrieval components from **Reposition**.
-The **Vyral** query license notice is preserved through that public upstream
+public evidence/acquisition components from **[triage-o-mator](https://github.com/EFrMG/triage-o-mator)**
+by **[Erwin Francisco Macias Ghiglione (EFrMG)](https://github.com/EFrMG)** and cache,
+projection, indexing, search, and retrieval components from
+**[Reposition](https://github.com/Univeracity/reposition)** by
+**[Jeremy Dixon (Univeracity)](https://github.com/Univeracity)**.
+The **[Vyral](https://github.com/Univeracity/vyral)** query license notice is preserved through that public upstream
 code; this does not mean Vyral's entire application was integrated.
 
 See [source provenance](../third_party/source-manifest.json) and

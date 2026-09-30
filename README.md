@@ -9,6 +9,23 @@ Start with a read-only inventory or evidence workflow, then configure the
 specific actions and approvals you need. The guides below cover the current
 v0.2.0 software, with examples and expected results.
 
+## Upstream authors and acknowledgments
+
+Trio builds on the work of these upstream authors:
+
+- **[Erwin Francisco Macias Ghiglione (EFrMG)](https://github.com/EFrMG)** —
+  author of **[triage-o-mator](https://github.com/EFrMG/triage-o-mator)**.
+  Its triage workflows and selected public evidence/acquisition components
+  underpin Trio's evidence and review workflows.
+- **[Jeremy Dixon (Univeracity)](https://github.com/Univeracity)** —
+  author of **[Reposition](https://github.com/Univeracity/reposition)**.
+  Its cache, projection, indexing, search, and retrieval components underpin
+  Trio's local evidence search and citations.
+
+Thank you to both authors and their upstream contributors. Their original
+copyrights and licenses are preserved. See [third-party notices](THIRD_PARTY_NOTICES.md)
+for exact source versions, adaptations, and the additional Vyral attribution.
+
 ## Start here
 
 - **New user:** [Getting started](docs/GETTING_STARTED.md) covers installation,
