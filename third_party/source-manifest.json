@@ -894,8 +894,89 @@
       "tests": [
         "tests/test_publication.py"
       ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/PRODUCT_SCOPE.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/OPERATIONS_GUIDE.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/CONTRIBUTIONS.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/operations.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/inventory.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/contributions.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/test_operations.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/test_contributions.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
     }
   ],
-  "rights_review": "PENDING independent public source-rights reviewer",
-  "publication_approved": false
+  "rights_review": "Exact independent review recorded in release attestation; source metadata does not grant approval",
+  "publication_approved": false,
+  "public_functional_contract": "docs/PRODUCT_SCOPE.md"
 }

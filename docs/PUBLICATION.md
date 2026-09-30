@@ -1,7 +1,8 @@
 # Publication
 
-This candidate has not been published. Tests and generic scans do not authorize
-an upload, first commit, push, or official release.
+The v0.1.0 public release is preserved. Each subsequent release requires fresh
+reviews bound to its exact source, artifacts, Git objects and metadata. Tests
+and generic scans do not by themselves authorize an upload or official release.
 
 The build_public_artifacts.py script takes an explicit JSON list of reviewed
 relative source files, new staging and artifact destinations, and a reviewed
@@ -49,9 +50,8 @@ approved public refs, reachable object IDs, public identities, and remote URLs.
 It never creates, signs, fetches, or pushes. It rejects alternate databases,
 grafts, shallow ancestry, replacement/stash/remote refs, unreviewed objects
 (including unreachable objects), submodules, LFS material, unsafe config, and
-mismatched author/committer/tag identities. Repository creation and real history
-review are **NOT_RUN** in this workspace. Synthetic tests validate the inspector
-without authoring Git history.
+mismatched author/committer/tag identities. Final Git history review is recorded per release. Synthetic tests validate
+the inspector; the checker itself never authors Git history.
 
 The candidate_manifest API binds paths, sizes, SHA-256 values, origin classes,
 destinations, metadata, and named gate results. verify_binding rechecks exact

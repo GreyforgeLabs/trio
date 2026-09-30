@@ -12,6 +12,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
+import re
 
 from check_publication import (
     Blocked, audit_source, canonical, read_object, stage_source,
@@ -96,7 +98,12 @@ def build(source, allowlist, stage, output, lock, source_manifest=None):
         staged_manifest = Path(stage) / relative
     audit_source(stage, allowlist, staged_manifest)
     output.mkdir(mode=0o700, parents=True)
-    archive = source_archive(stage, allowlist, output / "trio-triage-0.1.0-source.tar")
+    metadata = tomllib.loads((Path(stage) / "pyproject.toml").read_text())
+    version = metadata["project"]["version"]
+    if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        raise Blocked("publication_metadata")
+    prefix = "trio-triage-" + version
+    archive = source_archive(stage, allowlist, output / (prefix + "-source.tar"), prefix=prefix)
     with tempfile.TemporaryDirectory(prefix="public-build-") as temp:
         env = {"PATH": "/usr/bin:/bin", "HOME": temp,
                "LANG": "C.UTF-8", "PYTHONNOUSERSITE": "1",

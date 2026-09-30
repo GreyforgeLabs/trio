@@ -1,4 +1,8 @@
-# Actions
+# Preserved evidence-bound actions
+
+This document covers the original `action` family. Version 0.2.0 provides real
+GitHub maintenance and contribution transports in separate `ops` and
+`contribution` workflows; see OPERATIONS_GUIDE.md and CONTRIBUTIONS.md.
 
 The subsystem prepares exact local plans for comments, explained closure, and
 explained reopening. Writes default to disabled. Merge, labels, pushes, forks,
