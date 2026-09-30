@@ -678,7 +678,7 @@ class ProductEvidenceSearchTests(unittest.TestCase):
             self.assertNotEqual(code, 0)
             self.assertEqual(error["error"]["code"], "EVIDENCE_CORRUPT")
         retrieve = next(
-            x for x in catalog(parser())["leaves"] if x["command"] == "retrieve"
+            x for x in catalog(parser(),command="retrieve")["leaves"] if x["command"] == "retrieve"
         )
         self.assertTrue(
             any("--byte-offset" in x["flags"] for x in retrieve["arguments"])
@@ -1089,7 +1089,7 @@ class CorpusResumeTests(unittest.TestCase):
         with patch("trio_triage.transport.ReadTransport", return_value=self.read), patch("socket.socket", side_effect=AssertionError("network forbidden")):
             result = run(arguments, command)
         self.assertEqual(result["requests"], 5)
-        leaf = next(leaf for leaf in catalog(command)["leaves"] if leaf["command"] == "corpus run")
+        leaf = next(leaf for leaf in catalog(command, command="corpus run")["leaves"] if leaf["command"] == "corpus run")
         self.assertTrue(any("--refresh" in argument["flags"] for argument in leaf["arguments"]))
 
 

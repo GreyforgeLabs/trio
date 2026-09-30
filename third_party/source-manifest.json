@@ -8,6 +8,10 @@
     {
       "repository": "https://github.com/Univeracity/reposition",
       "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94"
+    },
+    {
+      "repository": "https://github.com/GreyforgeLabs/trio",
+      "commit": "aee55dff2fd770932a4562f07f5a12bfdd849789"
     }
   ],
   "files": [
@@ -207,14 +211,19 @@
       ]
     },
     {
-      "origin": "newly-authored",
+      "origin": "public-upstream-adaptation",
       "destination": "docs/USER_GUIDE.md",
       "license": "Apache-2.0",
       "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
-      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "adaptation": "Integrates merged public fixes for retrieval continuation, storage accounting, and ledger status scaling; preserves public operations additions where overlapping.",
       "tests": [
         "python -m unittest discover -s tests -v"
-      ]
+      ],
+      "repository": "https://github.com/GreyforgeLabs/trio",
+      "commit": "aee55dff2fd770932a4562f07f5a12bfdd849789",
+      "original_path": "docs/USER_GUIDE.md",
+      "source_sha256": "5101ff96d5832b968a7a71586bb6729516dd6df20a661d81bc65ae065b87c5a9",
+      "source_git_blob": "c9f1a22468b7c553fea6f5fc26d79800e0d9e0d7"
     },
     {
       "origin": "imported",
@@ -362,14 +371,19 @@
       ]
     },
     {
-      "origin": "newly-authored",
+      "origin": "public-upstream-adaptation",
       "destination": "src/trio_triage/cli.py",
       "license": "Apache-2.0",
       "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
-      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "adaptation": "Integrates merged public fixes for retrieval continuation, storage accounting, and ledger status scaling; preserves public operations additions where overlapping.",
       "tests": [
         "python -m unittest discover -s tests -v"
-      ]
+      ],
+      "repository": "https://github.com/GreyforgeLabs/trio",
+      "commit": "aee55dff2fd770932a4562f07f5a12bfdd849789",
+      "original_path": "src/trio_triage/cli.py",
+      "source_sha256": "3f954ef35c82cce2f72563a3c6b780882a1f73b480b9361dff737003d17b271a",
+      "source_git_blob": "dc528768d3abe9b8db7cb52b933b618dda49f90b"
     },
     {
       "origin": "newly-authored",
@@ -495,14 +509,19 @@
       "source_git_blob": "38b09459d88dce86bb9c594c0b028c49295abb4e"
     },
     {
-      "origin": "newly-authored",
+      "origin": "public-upstream-adaptation",
       "destination": "src/trio_triage/evidence/service.py",
       "license": "Apache-2.0",
       "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
-      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "adaptation": "Integrates merged public fixes for retrieval continuation, storage accounting, and ledger status scaling; preserves public operations additions where overlapping.",
       "tests": [
         "python -m unittest discover -s tests -v"
-      ]
+      ],
+      "repository": "https://github.com/GreyforgeLabs/trio",
+      "commit": "aee55dff2fd770932a4562f07f5a12bfdd849789",
+      "original_path": "src/trio_triage/evidence/service.py",
+      "source_sha256": "cd7f2b1ac859c924e44a390d2f16dbcf721f2166b56a37b1ed8dcce49deda231",
+      "source_git_blob": "1cd5b61335ba7bfa9c5a0c8f060b805135c03a6c"
     },
     {
       "origin": "newly-authored",
@@ -701,14 +720,19 @@
       "source_git_blob": "133a8de06a42f108712371aedf3a35e029cf73f4"
     },
     {
-      "origin": "newly-authored",
+      "origin": "public-upstream-adaptation",
       "destination": "src/trio_triage/search/service.py",
       "license": "Apache-2.0",
       "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
-      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "adaptation": "Integrates merged public fixes for retrieval continuation, storage accounting, and ledger status scaling; preserves public operations additions where overlapping.",
       "tests": [
         "python -m unittest discover -s tests -v"
-      ]
+      ],
+      "repository": "https://github.com/GreyforgeLabs/trio",
+      "commit": "aee55dff2fd770932a4562f07f5a12bfdd849789",
+      "original_path": "src/trio_triage/search/service.py",
+      "source_sha256": "efd9a1b642740e0892a590bc91b7ed5330556bad51a05803afe2a45491006843",
+      "source_git_blob": "e8e834226059b546dac868e7d339cfca5793833a"
     },
     {
       "origin": "newly-authored",
@@ -731,14 +755,19 @@
       ]
     },
     {
-      "origin": "newly-authored",
+      "origin": "public-upstream-adaptation",
       "destination": "src/trio_triage/team/__init__.py",
       "license": "Apache-2.0",
       "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
-      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "adaptation": "Integrates merged public fixes for retrieval continuation, storage accounting, and ledger status scaling; preserves public operations additions where overlapping.",
       "tests": [
         "python -m unittest discover -s tests -v"
-      ]
+      ],
+      "repository": "https://github.com/GreyforgeLabs/trio",
+      "commit": "aee55dff2fd770932a4562f07f5a12bfdd849789",
+      "original_path": "src/trio_triage/team/__init__.py",
+      "source_sha256": "46d951b1a2b614538ca2d94b5d91762ebb32fbd8d9b215c0982ee810319e01c7",
+      "source_git_blob": "03c3d7b3fb09c77c07dc21e0ff5ff33ac1327096"
     },
     {
       "origin": "newly-authored",
@@ -751,14 +780,19 @@
       ]
     },
     {
-      "origin": "newly-authored",
+      "origin": "public-upstream-adaptation",
       "destination": "src/trio_triage/triage/__init__.py",
       "license": "Apache-2.0",
       "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
-      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "adaptation": "Integrates merged public fixes for retrieval continuation, storage accounting, and ledger status scaling; preserves public operations additions where overlapping.",
       "tests": [
         "python -m unittest discover -s tests -v"
-      ]
+      ],
+      "repository": "https://github.com/GreyforgeLabs/trio",
+      "commit": "aee55dff2fd770932a4562f07f5a12bfdd849789",
+      "original_path": "src/trio_triage/triage/__init__.py",
+      "source_sha256": "c4cee439e7f558387007129ecb40e7d6fe1f42633f2a05ce283ba152dae2f6ae",
+      "source_git_blob": "70ef711f8c6c0b4175488137a5fbf036c21fe69f"
     },
     {
       "origin": "newly-authored",
@@ -791,16 +825,16 @@
       ]
     },
     {
-      "origin": "adapted",
-      "repository": "https://github.com/Univeracity/reposition",
-      "commit": "7a76620821a4ddf0423d89e98f908700ea7aae94",
-      "original_path": "src/reposition/_demo_cache.py",
-      "source_sha256": "d8897024c47ad4116632309ad00ab701a85f461a7223087743b82ff0ab14dd7e",
+      "origin": "public-upstream-adaptation",
+      "repository": "https://github.com/GreyforgeLabs/trio",
+      "commit": "aee55dff2fd770932a4562f07f5a12bfdd849789",
+      "original_path": "tests/test_evidence_search.py",
+      "source_sha256": "dc256d718c3d4d08699b63a10dfa27468775f452b808cc3d4750d3884817e409",
       "destination": "tests/test_evidence_search.py",
-      "license": "MIT",
-      "adaptation": "Reviewed minimal synthetic fixture functions; omit donor executable demo",
+      "license": "MIT AND Apache-2.0",
+      "adaptation": "Integrates merged public fixes for retrieval continuation, storage accounting, and ledger status scaling; preserves public operations additions where overlapping. Updates command argument discovery regression to use the selected retrieve catalog, retaining all UTF-8 continuation and budget assertions.",
       "tests": [
-        "python -m unittest discover -s tests -p test_evidence_search.py"
+        "python -m unittest discover -s tests -v"
       ],
       "sources": [
         {
@@ -823,7 +857,7 @@
         }
       ],
       "new_portions": "Independently authored from public spec, Apache-2.0; local technical review docs/TECHNICAL_REVIEW.md; official source-rights review pending.",
-      "source_git_blob": "3f542576194af834a7c1f42d343e62af3040c342"
+      "source_git_blob": "449a848b0235c4fafb534493dc877a00cba9edd9"
     },
     {
       "origin": "newly-authored",
@@ -836,14 +870,19 @@
       ]
     },
     {
-      "origin": "newly-authored",
+      "origin": "public-upstream-adaptation",
       "destination": "tests/test_team_core.py",
       "license": "Apache-2.0",
       "public_review_reference": "docs/TECHNICAL_REVIEW.md (local engineering audit; official release reviews pending)",
-      "adaptation": "Independent public behavior implementation or public/synthetic project metadata",
+      "adaptation": "Integrates merged public fixes for retrieval continuation, storage accounting, and ledger status scaling; preserves public operations additions where overlapping.",
       "tests": [
         "python -m unittest discover -s tests -v"
-      ]
+      ],
+      "repository": "https://github.com/GreyforgeLabs/trio",
+      "commit": "aee55dff2fd770932a4562f07f5a12bfdd849789",
+      "original_path": "tests/test_team_core.py",
+      "source_sha256": "3e3fc3a2262f313f9fc90236cdd504f694f818c38a17a0fec270eb9a500e0830",
+      "source_git_blob": "db5d68be2d8db723c54dada802b62dd862a79010"
     },
     {
       "origin": "newly-authored",
@@ -894,8 +933,119 @@
       "tests": [
         "tests/test_publication.py"
       ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/PRODUCT_SCOPE.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/OPERATIONS_GUIDE.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/CONTRIBUTIONS.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/operations.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/inventory.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "src/trio_triage/contributions.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/test_operations.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "tests/test_contributions.py",
+      "license": "Apache-2.0",
+      "public_review_reference": "docs/TECHNICAL_REVIEW.md; exact independent verdict in release approval",
+      "adaptation": "Independently authored public GitHub operations from docs/PRODUCT_SCOPE.md and official public API documentation",
+      "tests": [
+        "python -m unittest discover -s tests -v"
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/COMMAND_REFERENCE.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "Documentation checked against the public parser/catalog and runnable local examples; scope status explicitly recorded in docs/PRODUCT_SCOPE.md.",
+      "adaptation": "User-facing documentation for existing commands; no private source or runtime records.",
+      "tests": [
+        "Documentation link, command syntax, catalog coverage, JSON schema and offline workflow checks."
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/FEATURES.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "Documentation checked against the public parser/catalog and runnable local examples; scope status explicitly recorded in docs/PRODUCT_SCOPE.md.",
+      "adaptation": "User-facing documentation for existing commands; no private source or runtime records.",
+      "tests": [
+        "Documentation link, command syntax, catalog coverage, JSON schema and offline workflow checks."
+      ]
+    },
+    {
+      "origin": "newly-authored",
+      "destination": "docs/GETTING_STARTED.md",
+      "license": "Apache-2.0",
+      "public_review_reference": "Documentation checked against the public parser/catalog and runnable local examples; scope status explicitly recorded in docs/PRODUCT_SCOPE.md.",
+      "adaptation": "User-facing documentation for existing commands; no private source or runtime records.",
+      "tests": [
+        "Documentation link, command syntax, catalog coverage, JSON schema and offline workflow checks."
+      ]
     }
   ],
-  "rights_review": "PENDING independent public source-rights reviewer",
-  "publication_approved": false
+  "rights_review": "Exact independent review recorded in release attestation; source metadata does not grant approval",
+  "publication_approved": false,
+  "public_functional_contract": "docs/PRODUCT_SCOPE.md"
 }

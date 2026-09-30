@@ -7,7 +7,7 @@ from .catalog import catalog
 class Parser(argparse.ArgumentParser):
     def error(self,message):raise TrioError("INVALID_INVOCATION",exit_code=2)
 def parser():
-    p=Parser(prog="trio",description="Local public repository evidence and team triage")
+    p=Parser(prog="trio",description="Public GitHub operations, contributions, evidence and team review")
     def common(x,suppress=False):
         d=argparse.SUPPRESS if suppress else None
         x.add_argument("--home",default=d);x.add_argument("--config-location",default=d)
@@ -24,6 +24,7 @@ def parser():
     def selection(x):dataset(x);q=x.add_mutually_exclusive_group(required=True);q.add_argument("--snapshot");q.add_argument("--corpus")
     def actor(x):opt(x,"--actor",required=True)
     for name in ("commands","status","doctor","datasets"):top(name)
+    opt(sub.choices["commands"],"--command")
     x=top("init");opt(x,"--config")
     f=family("repo",["add","list"]);opt(f["add"],"repository");opt(f["add"],"--read-token-env")
     x=top("capture");dataset(x);opt(x,"--kind",choices=["issue","pr"]);opt(x,"--number",type=int);opt(x,"--inventory",action="store_true");opt(x,"--limit",type=int,default=100);opt(x,"--profile",default="discussion",choices=["discussion","pr-context","pr-code","pr-comparison","backlog"]);opt(x,"--request-budget",type=int);opt(x,"--read-token-env")
@@ -64,17 +65,82 @@ def parser():
     opt(f["reconcile"],"--read-token-env");opt(f["authorize"],"--digest",required=True);actor(f["authorize"]);actor(f["execute"])
     f=family("maintenance",["indexes"]);opt(f["indexes"],"--id",action="append");opt(f["indexes"],"--apply",action="store_true")
     x=top("migrate");opt(x,"--apply",action="store_true")
+    f=family("inventory",["sync","snapshots","list","show","drift"])
+    x=f["sync"];opt(x,"--token-env",required=True);opt(x,"--organization");opt(x,"--repository-limit",type=int,default=100);opt(x,"--item-limit",type=int,default=1000);opt(x,"--request-budget",type=int,default=100)
+    for k in ("list","show"):opt(f[k],"--snapshot",required=True)
+    x=f["list"];opt(x,"--kind",default="repositories",choices=["repositories","forks","pulls","issues","notifications","workflow_runs","releases"]);opt(x,"--repository");opt(x,"--limit",type=int,default=20);opt(x,"--cursor")
+    opt(f["show"],"--repository",required=True);opt(f["drift"],"--before",required=True);opt(f["drift"],"--after",required=True)
+    f=family("ops",["policy","plan","inspect","approve","execute","reconcile"])
+    opt(f["policy"],"--path")
+    x=f["plan"];opt(x,"--token-env",required=True);opt(x,"--operation",required=True,choices=["notification-ack","issue-label","issue-comment","issue-close","issue-reopen","pr-ready","pr-close","pr-update-branch","pr-merge"]);opt(x,"--repository");opt(x,"--number",type=int);opt(x,"--thread");opt(x,"--text");opt(x,"--labels",help="JSON file containing the exact replacement label list");opt(x,"--merge-method",default="merge",choices=["merge","squash","rebase"])
+    for k in ("inspect","approve","execute","reconcile"):opt(f[k],"--id",required=True)
+    for k in ("plan","execute","reconcile"):
+        if k!="plan":opt(f[k],"--token-env",required=True)
+    for k in ("approve","execute"):actor(f[k])
+    opt(f["approve"],"--digest",required=True)
+    f=family("contribution",["intake","list","show","acquire","patch","validate","plan","inspect","approve","publish","reconcile","revise","refresh"])
+    x=f["intake"];opt(x,"--repository",required=True);q=x.add_mutually_exclusive_group(required=True);q.add_argument("--issue",type=int);q.add_argument("--finding")
+    for k in f:
+        if k not in ("intake","list"):opt(f[k],"--id",required=True)
+    for k in ("intake","acquire","plan","publish","reconcile","revise","refresh"):opt(f[k],"--token-env",required=True)
+    for k in ("acquire","refresh"):opt(f[k],"--base",required=True);opt(f[k],"--base-branch",required=True);opt(f[k],"--request-budget",type=int,default=1000)
+    opt(f["patch"],"--path",required=True)
+    x=f["validate"];opt(x,"--commands",required=True,help="JSON file containing explicitly selected argv arrays");opt(x,"--image",required=True);opt(x,"--timeout",type=int,default=60);opt(x,"--memory-mb",type=int,default=512);opt(x,"--pids",type=int,default=64);opt(x,"--cpus",type=int,default=1)
+    for k in ("plan","revise"):
+        x=f[k];opt(x,"--branch",required=True);opt(x,"--title",required=True);opt(x,"--body",required=True,help="UTF-8 file containing exact pull request body");opt(x,"--author-name",required=True);opt(x,"--author-email",required=True);opt(x,"--message");opt(x,"--mode",default="direct",choices=["direct","fork"]);opt(x,"--fork-owner")
+    for k in ("approve","publish"):actor(f[k])
+    opt(f["approve"],"--digest",required=True)
     return p
 
 def run(a,p):
     command=a.family+(" "+a.leaf if getattr(a,"leaf",None) else "")
-    if command=="commands":return catalog(p)
+    if command=="commands":return catalog(p,getattr(a,"command",None))
     store=Store(a.home,a.config_location)
     if command=="init":store.init(read_json(a.config) if a.config else None);return {"schema":"trio.init/v1","state_version":1,"writes_enabled":store.config["writes_enabled"]}
     store.require()
+    if command.startswith(("inventory ","ops ","contribution ")):
+        from .operations import GitHubTransport,MaintenanceService,OperationState
+        transport=GitHubTransport(a.token_env,store.config["timeout"]) if getattr(a,"token_env",None) else None
+        if command.startswith("inventory "):
+            from .inventory import InventoryService
+            service=InventoryService(store)
+            if a.leaf=="sync":return service.sync(transport,a.organization,a.repository_limit,a.item_limit,a.request_budget)
+            if a.leaf=="snapshots":return service.snapshots()
+            if a.leaf=="list":return service.list(a.snapshot,a.kind,a.repository,a.limit,a.cursor,a.max_bytes)
+            if a.leaf=="show":return service.show(a.snapshot,a.repository)
+            if a.leaf=="drift":return service.drift(a.before,a.after)
+        if command.startswith("ops "):
+            service=MaintenanceService(store)
+            if a.leaf=="policy":return service.configure(read_json(a.path)) if a.path else {"schema":"trio.operations-policy/v1","policy":service.policy()}
+            if a.leaf=="plan":return service.plan(transport,a.operation,a.repository,a.number,a.thread,a.text,read_json(a.labels) if a.labels else None,a.merge_method)
+            if a.leaf=="inspect":return service.inspect(a.id)
+            if a.leaf=="approve":return service.approve(a.id,a.digest,a.actor)
+            if a.leaf=="execute":return service.execute(a.id,a.actor,transport)
+            if a.leaf=="reconcile":return service.reconcile(a.id,transport)
+        if command.startswith("contribution "):
+            from .contributions import ContributionService,MAX_PATCH
+            service=ContributionService(store)
+            def bytes_file(path,limit):
+                selected=Path(path).absolute()
+                if any(x.is_symlink() for x in [selected,*selected.parents]) or not selected.is_file():raise TrioError("UNSAFE_PATH",exit_code=2)
+                with selected.open("rb") as stream:raw=stream.read(limit+1)
+                if len(raw)>limit:raise TrioError("RESOURCE_LIMIT")
+                return raw
+            if a.leaf=="intake":return service.intake(transport,a.repository,a.issue,a.finding)
+            if a.leaf=="list":return service.list()
+            if a.leaf=="show":return service.show(a.id)
+            if a.leaf=="acquire":return service.acquire(a.id,transport,a.base,a.base_branch,a.request_budget)
+            if a.leaf=="patch":return service.patch(a.id,bytes_file(a.path,MAX_PATCH))
+            if a.leaf=="validate":return service.validate(a.id,read_json(a.commands),a.image,timeout=a.timeout,memory_mb=a.memory_mb,pids=a.pids,cpus=a.cpus)
+            if a.leaf in ("plan","revise"):return service.plan(a.id,transport,a.branch,a.title,bytes_file(a.body,60000).decode("utf-8"),a.author_name,a.author_email,a.message,a.mode,a.fork_owner,revision=a.leaf=="revise")
+            if a.leaf=="inspect":return service.inspect_plan(a.id)
+            if a.leaf=="approve":return service.approve(a.id,a.digest,a.actor,"publication-plans")
+            if a.leaf=="publish":return service.publish(a.id,a.actor,transport)
+            if a.leaf=="reconcile":return service.reconcile(a.id,transport)
+            if a.leaf=="refresh":return service.refresh(a.id,transport,a.base,a.base_branch,a.request_budget)
     if command in ("status","doctor"):
         with store.db() as db:fts=bool(db.execute("SELECT sqlite_compileoption_used('ENABLE_FTS5')").fetchone()[0])
-        return {"schema":"trio."+command+"/v1","initialized":True,"state_version":1,"fts5":fts,"writes_enabled":store.config["writes_enabled"],"live_validation":"NOT_RUN","retention":"no automatic authoritative evidence pruning"}
+        return {"schema":"trio."+command+"/v1","initialized":True,"state_version":1,"fts5":fts,"writes_enabled":store.config["writes_enabled"],"operations_policy":__import__("trio_triage.operations",fromlist=["OperationState"]).OperationState(store).policy(),"live_validation":"NOT_RUN","retention":"no automatic authoritative evidence pruning"}
     from .evidence import EvidenceService
     ev=EvidenceService(store)
     from .search import SearchService
@@ -202,8 +268,9 @@ def main(argv=None):
             if result.get("conflict") or result.get("conflicts") or isinstance(coverage,dict) and (coverage.get("gaps") or coverage.get("incomplete")):code=1
             inventory=result.get("inventory")
             if isinstance(inventory,dict) and (inventory.get("reason") or inventory.get("truncated") or inventory.get("pagination_complete") is False):code=1
+            if result.get("complete") is False or result.get("outcome") in {"pending","stopped","uncertain","failed"}:code=4 if result.get("outcome") in {"uncertain","failed"} else 1
             steps=result.get("steps",{})
-            if any(v.get("outcome") in ("unknown","failed") for v in steps.values()):code=4
+            if any(v.get("outcome") in ("unknown","failed","uncertain") for v in steps.values()):code=4
 
         raw=canonical(result)+b"\n"
         if len(raw)>maximum:
@@ -211,9 +278,10 @@ def main(argv=None):
             command=a.family+(" "+a.leaf if getattr(a,"leaf",None) else "")
             effect=LEAVES[command][0]
             if "write-local" in effect and not (command in ("team export","packet share") and result.get("requires_approval")):
-                identifiers={k:result[k] for k in ("event_id","entity_id","dataset","snapshot","corpus","operation_id","digest") if k in result}
-                result={"schema":result["schema"],"completed":True,"output_truncated":True,"identifiers":identifiers,"diagnostic":"Inspect the completed record with a larger response budget"}
-                code=1;raw=canonical(result)+b"\n"
+                identifiers={k:result[k] for k in ("id","event_id","entity_id","dataset","snapshot","corpus","operation_id","digest","seal_digest","tree","base") if k in result}
+                status={k:result[k] for k in ("outcome","error","complete") if k in result}
+                result={"schema":result["schema"],"completed":code==0,"record_written":True,"output_truncated":True,"identifiers":identifiers,**status,"diagnostic":"Inspect the durable record with a larger response budget"}
+                code=code or 1;raw=canonical(result)+b"\n"
                 if len(raw)>maximum:raise TrioError("BUDGET_TOO_SMALL")
             else:raise TrioError("BUDGET_TOO_SMALL","Increase --max-bytes for the complete response")
     except TrioError as e:

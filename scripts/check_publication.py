@@ -82,7 +82,8 @@ def normalized(path):
     return path
 
 
-DISTRIBUTION_ROOTS = {"trio-triage-0.1.0", "trio_triage-0.1.0"}
+DISTRIBUTION_ROOTS = {"trio-triage-0.1.0", "trio_triage-0.1.0",
+                      "trio-triage-0.2.0", "trio_triage-0.2.0"}
 
 
 def archive_name(path, *, directory=False):
