@@ -151,12 +151,14 @@ a validated source bundle.
 
 Symlink support alone does not qualify a complete Omarchy acquisition. Its
 [tree `8b4eae66da2938ba9559f103b18dbf85cdf28a70`](https://api.github.com/repos/omacom/omarchy/git/trees/8b4eae66da2938ba9559f103b18dbf85cdf28a70?recursive=1)
-contains 1,953 blobs totaling 77,363,647 bytes, exceeding the unchanged 64 MiB
-source cap (67,108,864 bytes). It would also need at least 1,956 requests,
-above the default 1,000 request budget. `--request-budget 1956` addresses only
-that request limit; no current CLI option raises the source-byte cap. The
-Omarchy-shaped symlink regression uses synthetic target bytes and is not a
-full-tree or live-container qualification.
+contains 1,953 blobs totaling 77,363,647 bytes, exceeding the default 64 MiB
+source budget (67,108,864 bytes). It would also need at least 1,956 requests,
+above the default 1,000 request budget. Explicitly selecting
+`--request-budget 1956 --max-source-bytes 83886080` admits those measured raw
+byte/request totals under the bounded 80 MiB option. Each complete source/patch
+JSON record must still fit the 128 MiB record limit, and all existing source
+checks still apply. The Omarchy-shaped symlink regression uses synthetic target
+bytes and is not a full-tree or live-container qualification.
 
 Synthetic integration tests cover revision drift, stale generations,
 uncertainty preservation, request bounds, partial capture/resume, replay,

@@ -83,6 +83,7 @@ def parser():
         if k not in ("intake","list"):opt(f[k],"--id",required=True)
     for k in ("intake","acquire","plan","publish","reconcile","revise","refresh"):opt(f[k],"--token-env",required=True)
     for k in ("acquire","refresh"):opt(f[k],"--base",required=True);opt(f[k],"--base-branch",required=True);opt(f[k],"--request-budget",type=int,default=1000)
+    for k in ("acquire","refresh"):opt(f[k],"--max-source-bytes",type=int,default=67108864,help="Raw source-byte budget: 1..83886080; default 67108864 (64 MiB)")
     opt(f["patch"],"--path",required=True)
     x=f["validate"];opt(x,"--commands",required=True,help="JSON file containing explicitly selected argv arrays");opt(x,"--image",required=True);opt(x,"--timeout",type=int,default=60);opt(x,"--memory-mb",type=int,default=512);opt(x,"--pids",type=int,default=64);opt(x,"--cpus",type=int,default=1)
     for k in ("plan","revise"):
@@ -146,7 +147,7 @@ def run(a,p):
             if a.leaf=="intake":return service.intake(transport,a.repository,a.issue,a.finding)
             if a.leaf=="list":return service.list()
             if a.leaf=="show":return service.show(a.id)
-            if a.leaf=="acquire":return service.acquire(a.id,transport,a.base,a.base_branch,a.request_budget)
+            if a.leaf=="acquire":return service.acquire(a.id,transport,a.base,a.base_branch,a.request_budget,a.max_source_bytes)
             if a.leaf=="patch":return service.patch(a.id,bytes_file(a.path,MAX_PATCH))
             if a.leaf=="validate":return service.validate(a.id,read_json(a.commands),a.image,timeout=a.timeout,memory_mb=a.memory_mb,pids=a.pids,cpus=a.cpus)
             if a.leaf in ("plan","revise"):return service.plan(a.id,transport,a.branch,a.title,bytes_file(a.body,60000).decode("utf-8"),a.author_name,a.author_email,a.message,a.mode,a.fork_owner,revision=a.leaf=="revise")
@@ -154,7 +155,7 @@ def run(a,p):
             if a.leaf=="approve":return service.approve(a.id,a.digest,a.actor,"publication-plans")
             if a.leaf=="publish":return service.publish(a.id,a.actor,transport)
             if a.leaf=="reconcile":return service.reconcile(a.id,transport)
-            if a.leaf=="refresh":return service.refresh(a.id,transport,a.base,a.base_branch,a.request_budget)
+            if a.leaf=="refresh":return service.refresh(a.id,transport,a.base,a.base_branch,a.request_budget,a.max_source_bytes)
     if command in ("status","doctor"):
         with store.db() as db:fts=bool(db.execute("SELECT sqlite_compileoption_used('ENABLE_FTS5')").fetchone()[0])
         return {"schema":"trio."+command+"/v1","initialized":True,"state_version":1,"fts5":fts,"writes_enabled":store.config["writes_enabled"],"operations_policy":__import__("trio_triage.operations",fromlist=["OperationState"]).OperationState(store).policy(),"live_validation":"NOT_RUN","retention":"no automatic authoritative evidence pruning"}

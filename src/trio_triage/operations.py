@@ -11,6 +11,7 @@ from .storage import atomic_json,canonical,confined,digest,read_json
 
 REPO=re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 SHA=re.compile(r"[0-9a-f]{40}")
+MAX_OPERATION_RECORD_BYTES=134217728
 OPERATIONS={"notification-ack","issue-label","issue-comment","issue-close","issue-reopen","pr-ready","pr-close","pr-update-branch","pr-merge","contribution-publish"}
 PERMISSIONS={"notification-ack":"notifications:write","issue-label":"issues:write","issue-comment":"issues:write","issue-close":"issues:write","issue-reopen":"issues:write","pr-ready":"pull_requests:write","pr-close":"pull_requests:write","pr-update-branch":"contents:write","pr-merge":"contents:write","contribution-publish":"contents:write"}
 
@@ -148,7 +149,7 @@ class OperationState:
         with self.store.write_lock():atomic_json(self.root/"policy.json",policy)
         return {"schema":"trio.operations-policy/v1","policy":policy,"digest":digest(policy)}
     def put(self,kind,identifier,value):atomic_json(confined(self.root,kind+"/"+safe_id(identifier)+".json"),value)
-    def get(self,kind,identifier):return read_json(confined(self.root,kind+"/"+safe_id(identifier)+".json"),max_bytes=134217728)
+    def get(self,kind,identifier):return read_json(confined(self.root,kind+"/"+safe_id(identifier)+".json"),max_bytes=MAX_OPERATION_RECORD_BYTES)
     def gate(self,plan,actor,transport,publication=False):
         policy=self.policy();roles=policy["actors"].get(actor,[])
         if not policy["publication_enabled" if publication else "maintenance_enabled"] or "publisher" not in roles:raise TrioError("GATE_CLOSED")
