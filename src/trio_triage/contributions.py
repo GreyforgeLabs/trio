@@ -171,13 +171,25 @@ class ContributionService(OperationState):
             if not isinstance(issue,dict) or issue.get("number")!=number or issue.get("pull_request"):raise TrioError("INVALID_TARGET")
             details={"kind":"issue","number":number,"item_id":issue["id"],"title":issue.get("title",""),"url":issue.get("html_url")}
         else:
-            from .triage import TriageService
+            from .triage import TriageService,CATEGORIES
+            from . import contracts as c
             selected=TriageService(self.store).show(finding)
-            revision=selected.get("revision") or selected.get("finding")
-            if not isinstance(revision,dict):
-                heads=selected.get("heads",[]);revision=heads[0] if len(heads)==1 else None
-            if not isinstance(revision,dict):raise TrioError("CONFLICT")
-            details={"kind":"finding","finding":finding,"selection_digest":digest(selected)}
+            if selected["conflict"] or len(selected["revisions"])!=1:raise TrioError("CONFLICT")
+            revision=selected["revisions"][0]
+            if revision["operation"] not in {"finding","resolve"} or revision["payload"].get("category") not in CATEGORIES:raise TrioError("INVALID_TARGET")
+            refs=revision["evidence_refs"]
+            if revision["payload"].get("evidence_refs")!=refs or revision["payload"].get("selection_digests")!=sorted({ref["snapshot"] for ref in refs}):raise TrioError("EVIDENCE_CORRUPT")
+            if selected["stale"]:raise TrioError("PLAN_CHANGED")
+            current=c.repository(remote["full_name"],database_id=remote["id"],node_id=remote.get("node_id"))
+            try:
+                for item in [*revision["payload"]["items"],*refs]:
+                    if item["repository"]["database_id"] is None:raise ValueError()
+                    c.same_repository(item["repository"],current)
+            except (ValueError,KeyError,TypeError):raise TrioError("IDENTITY_MISMATCH") from None
+            # Queue the exact proposal as context; finding reviews never grant
+            # validation seals, publication approval, or publisher authority.
+            details={"kind":"finding","finding":finding,"finding_revision":revision["event_id"],
+                "decision_digest":revision["payload"]["decision_digest"],"selection_digest":digest(selected)}
         transport.safe_content(details)
         value={"schema":"trio.contribution/v1","id":uuid.uuid4().hex,"repository":remote["full_name"],"repository_id":remote["id"],"identity":identity,"intake":details,"created_at":now(),"generation":0,"stage":"queued"}
         with self.store.write_lock():self.put("contributions",value["id"],value)

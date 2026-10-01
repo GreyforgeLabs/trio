@@ -842,7 +842,10 @@ Inspect help: `trio ops reconcile --help`.
 
 ## contribution intake
 
-Start from a real public issue or a local finding ID; current finding bridge has a documented compatibility limit.
+Start from a real public issue or a non-stale, non-conflicting local finding ID.
+Finding items and cited sources must match the selected repository's stable
+identity. Intake records the exact revision and digests without granting
+validation or publication authority.
 
 Declared effect: `read-github+write-local`. Network: `github-read`.
 Output schema: `trio.contribution/v1`. Explicit authorization declared: no.

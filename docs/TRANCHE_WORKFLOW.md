@@ -118,6 +118,22 @@ that snapshot, then write and review findings through the existing workflow.
 Evidence references in the group are retained for review and source-scoped
 sharing checks. Group notes still require the ordinary sharing review.
 
+The group is context for a deliberate `finding propose` decision; the adapter
+does not choose the finding category for you. Inspect `group show --id GROUP_ID`
+and preserve its revision-bound members and evidence references when preparing
+the finding's `--items` and `--refs` JSON files. An agent-authored finding remains
+a proposal. A current, single finding can then enter the contribution queue:
+
+```bash
+trio --home "$TRIO_STATE" contribution intake --repository OWNER/REPO --finding FINDING_ID --token-env TRIO_GITHUB_TOKEN --json
+```
+
+Intake verifies cited-source consistency and the live repository identity, and
+records the exact finding revision and decision digest. Passing a group ID,
+stale evidence, conflicting findings/reviews, or evidence for another repository
+refuses. A queued entry has no acquired source, validation seal or publication
+approval. Continue through the independent [contribution gates](CONTRIBUTIONS.md).
+
 For an already transferred versioned envelope, `handoff prepare --dataset
 DATASET_ID --path HANDOFF_JSON --actor contributor` is the offline preparation
 route; `handoff run` performs live capture. This is optional and is not needed
@@ -142,7 +158,10 @@ live model/mutation qualification and automatic scheduling are separate work.
 The provider-aware compatibility check exercises real, separately installed
 source with synthetic observations: default Jev protocol, category-only
 offline results, explicit PR/pair abstention, stale provider settings, and
-changed batches. All paths stop at draft review groups. Run it explicitly:
+changed batches. Each path also exercises the actual JSON CLI from handoff to
+group inspection, an explicit agent finding, and contribution intake; it checks
+that provider claims remain unchanged and publication stays disabled. No source
+acquisition, sandbox execution or live publication is implied. Run it explicitly:
 
 ```bash
 PYTHONPATH=src python tests/test_handoff.py --tranche-root LEGACY_CHECKOUT --tranche-root REVIEWED_PROVIDER_CHECKOUT

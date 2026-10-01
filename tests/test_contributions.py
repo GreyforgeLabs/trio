@@ -8,6 +8,12 @@ import test_operations as fixture
 from trio_triage.contributions import ContributionService,PodmanSandbox,git_object,tree_sha,encode_files,decode_files,apply_patch,commit_bytes
 from trio_triage.operations import GitHubTransport
 from trio_triage.errors import TrioError
+from trio_triage import contracts as c
+from trio_triage.evidence import EvidenceService
+from trio_triage.search import SearchService
+from trio_triage.storage import Store,atomic_json,digest
+from trio_triage.team import TeamService
+from trio_triage.triage import TriageService
 
 PATCH=b"--- a/answer.py\n+++ b/answer.py\n@@ -1 +1 @@\n-answer = 1\n+answer = 2\n"
 class Sandbox:
@@ -211,3 +217,198 @@ class ContributionTests(unittest.TestCase):
         self.assertEqual(code,4)
         self.assertLessEqual(len(raw),1024)
         self.assertEqual(self.service.get("publication-journals",plan["id"])["outcome"],"uncertain")
+
+
+class FindingIntakeTests(unittest.TestCase):
+    def setUp(self):
+        ContributionTests.setUp(self)
+        self.store.config.update(installation_id="synthetic-finding-intake", roles={
+            "proposer": ["contributor"], "reviewer": ["reviewer"],
+            "other-reviewer": ["reviewer"], "maintainer": ["maintainer"]})
+        atomic_json(self.store.root / "config.json", self.store.config)
+        self.ev = EvidenceService(self.store)
+        self.scope = dict(host="github.com", repository_id=1, full_name="public/project",
+            visibility="public", observed_at="2026-09-01T00:00:00Z")
+        self.dataset = self.ev.enroll(self.scope)["dataset"]
+        self.repository = c.repository("public/project", database_id=1)
+        self.manifest = self.snapshot("2026-09-01T00:00:00Z", "Synthetic answer evidence")
+        search = SearchService(self.store)
+        search.build(self.dataset, self.manifest["snapshot_id"])
+        result = search.query(self.dataset, self.manifest["snapshot_id"], "answer", max_bytes=30000)
+        self.refs = [item["fragments"][0]["ref"] for item in result["items"]]
+        self.assertEqual(len(self.refs), 2)
+        self.items = [dict(row["identity"], repository=self.repository, revision=row["revision"])
+            for row in self.manifest["items"]]
+        self.triage = TriageService(self.store)
+        self.network = patch("socket.socket", side_effect=AssertionError("live network forbidden"))
+        self.network.start(); self.addCleanup(self.network.stop)
+
+    def snapshot(self, at, body):
+        records, payloads = [], {}
+        for number in (1, 2):
+            revision = dict(updated_at=at, base_sha=None, head_sha=None)
+            raw = c.canonical(dict(number=number, kind="issue", state="open",
+                title="Synthetic answer " + str(number), body=body,
+                html_url="https://github.com/public/project/issues/" + str(number)))
+            ref = c.artifact_ref(raw)
+            payloads[c.object_name(ref)] = raw
+            descriptor = dict(status="complete", fetched_at=at,
+                source=dict(transport="rest", resource="/synthetic/" + str(number)),
+                revision=revision, expected_count=None, received_count=None,
+                pagination_complete=None, truncated=False, error=None, object=ref)
+            records.append(dict(identity=dict(kind="issue", number=number,
+                database_id=10+number, node_id="I_synthetic_" + str(number)),
+                revision=revision, components={"summary": descriptor}))
+        manifest = c.seal_snapshot(dict(schema_version=1, artifact="evidence-snapshot",
+            repository=self.repository, started_at=at, completed_at=at,
+            requested_components=["summary"], items=records))
+        self.ev.publish(self.dataset, manifest, payloads)
+        return manifest
+
+    def finding(self, **kwargs):
+        items = kwargs.pop("items", self.items)
+        return self.triage.propose("related", items, self.refs,
+            "Synthetic investigation; no publication approval", "proposer", author_kind="agent", **kwargs)
+
+    def intake(self, finding):
+        return self.service.intake(self.transport, "public/project", finding=finding)
+
+    def imported_finding(self, change=None):
+        original = self.finding()
+        event = TeamService(self.store).export(ids=[original["event_id"]])["events"][0]
+        event = copy.deepcopy(event)
+        event["entity_id"] += "-imported"
+        if change is not None:
+            change(event)
+        payload = event["payload"]
+        payload["decision_digest"] = digest({k: v for k, v in payload.items()
+            if k not in ("decision_digest", "resolution")})
+        event["payload_digest"] = digest(payload)
+        event["event_id"] = digest({k: v for k, v in event.items() if k != "event_id"})
+        bundle = dict(schema="trio.team-bundle/v1", events=[event])
+        bundle["digest"] = digest(bundle)
+        TeamService(self.store).import_bundle_data(bundle)
+        return event
+
+    def assert_refused(self, finding, code):
+        before = self.service.list()
+        with self.assertRaises(TrioError) as error:
+            self.intake(finding)
+        self.assertEqual(error.exception.code, code)
+        self.assertEqual(self.service.list(), before)
+        self.assertFalse(any(row[0] != "GET" for row in self.http.requests))
+
+    def test_current_agent_finding_enters_queue_through_real_cli(self):
+        from trio_triage.cli import parser, run
+        finding = self.finding()
+        selected = self.triage.show(finding["entity_id"])
+        self.assertFalse(selected["stale"])
+        self.assertEqual(selected["reviews"], [])
+        command = parser()
+        args = command.parse_args(["--home", str(self.store.root), "contribution", "intake",
+            "--repository", "public/project", "--finding", finding["entity_id"],
+            "--token-env", "TRIO_TEST_TOKEN"])
+        with patch("trio_triage.operations.GitHubTransport", return_value=self.transport):
+            entry = run(args, command)
+        self.assertEqual(entry["stage"], "queued")
+        self.assertEqual(entry["intake"], dict(kind="finding", finding=finding["entity_id"],
+            finding_revision=finding["event_id"], decision_digest=finding["payload"]["decision_digest"],
+            selection_digest=digest(selected)))
+        self.assertEqual(self.service.show(entry["id"])["intake"], entry["intake"])
+        self.assertFalse((self.service.root / "approvals").exists())
+        self.assertFalse(any(row[0] != "GET" for row in self.http.requests))
+
+    def test_nonfinding_ledger_entity_cannot_be_intaken_as_a_finding(self):
+        group = self.triage.group(self.items, "proposer")
+        self.assert_refused(group["entity_id"], "INVALID_TARGET")
+
+    def test_consistent_imported_finding_remains_untrusted_queue_context(self):
+        finding = self.imported_finding()
+        shown = self.triage.show(finding["entity_id"])
+        self.assertEqual(shown["revisions"][0]["trust"], "claimed")
+        entry = self.intake(finding["entity_id"])
+        self.assertEqual(entry["stage"], "queued")
+        self.assertEqual(entry["intake"]["finding_revision"], finding["event_id"])
+        self.assertEqual(self.triage.show(finding["entity_id"])["revisions"][0]["trust"], "claimed")
+        self.assertFalse((self.service.root / "approvals").exists())
+
+    def test_imported_finding_cannot_hide_citations_or_forge_selection_digests(self):
+        for field in ("evidence_refs", "selection_digests"):
+            with self.subTest(field=field):
+                def change(event):
+                    if field == "evidence_refs":
+                        event["evidence_refs"] = []
+                        event["payload"]["evidence_refs"][0]["repository"].update(
+                            full_name="other/project", database_id=999)
+                    else:
+                        event["payload"]["selection_digests"] = ["f" * 64]
+                finding = self.imported_finding(change)
+                self.assertFalse(self.triage.show(finding["entity_id"])["stale"])
+                self.assert_refused(finding["entity_id"], "EVIDENCE_CORRUPT")
+
+    def test_conflicting_reviews_refuse_even_with_one_finding_revision(self):
+        finding = self.finding()
+        for actor, decision in (("reviewer", "approve"), ("other-reviewer", "reject")):
+            self.triage.review(finding["entity_id"], finding["payload"]["decision_digest"], decision, actor)
+        self.assertEqual(len(self.triage.show(finding["entity_id"])["revisions"]), 1)
+        self.assert_refused(finding["entity_id"], "CONFLICT")
+
+    def test_conflicting_finding_heads_refuse_until_explicitly_resolved(self):
+        first = self.finding()
+        peer = Store(self.root / "peer")
+        peer.init(dict(self.store.config, installation_id="synthetic-finding-peer"))
+        evidence = EvidenceService(peer)
+        evidence.enroll(self.scope)
+        evidence.import_cache(self.dataset, self.ev.path(self.dataset, "evidence"))
+        TeamService(peer).import_bundle_data(TeamService(self.store).export(ids=[first["event_id"]]))
+        current = self.finding(finding_id=first["entity_id"], parents=[first["event_id"]])
+        other = TriageService(peer).propose("different_cause", self.items, self.refs,
+            "Synthetic concurrent proposal", "proposer", finding_id=first["entity_id"], parents=[first["event_id"]])
+        TeamService(self.store).import_bundle_data(TeamService(peer).export(ids=[other["event_id"]]))
+        self.assert_refused(first["entity_id"], "CONFLICT")
+        resolved = TeamService(self.store).resolve(first["entity_id"],
+            [current["event_id"], other["event_id"]], "Reviewed synthetic alternatives",
+            "maintainer", selected_id=current["event_id"])
+        self.assertEqual(self.intake(first["entity_id"])["intake"]["finding_revision"], resolved["event_id"])
+
+    def test_stale_or_missing_source_cannot_start_a_finding_contribution(self):
+        finding = self.finding()
+        path = self.ev.path(self.dataset, "evidence", "objects", c.object_name(self.refs[0]["object"]))
+        raw = path.read_bytes()
+        path.unlink()
+        self.assert_refused(finding["entity_id"], "PLAN_CHANGED")
+        path.write_bytes(raw)
+        self.snapshot("2026-09-02T00:00:00Z", "Changed synthetic answer evidence")
+        self.assert_refused(finding["entity_id"], "PLAN_CHANGED")
+
+    def test_finding_items_must_match_live_repository_identity(self):
+        for changed in (dict(database_id=2), dict(database_id=None),
+                dict(full_name="other/project"), dict(host="other.invalid"),
+                dict(node_id="R_contradictory_synthetic")):
+            with self.subTest(changed=changed):
+                items = copy.deepcopy(self.items)
+                items[0]["repository"].update(changed)
+                finding = self.finding(items=items)
+                self.assert_refused(finding["entity_id"], "IDENTITY_MISMATCH")
+
+    def test_source_repository_must_match_even_when_items_claim_target_repository(self):
+        for item in self.items:
+            item["repository"] = c.repository("public/project", database_id=2)
+        other = self.finding()
+        self.http.repo["id"] = 2
+        self.assert_refused(other["entity_id"], "IDENTITY_MISMATCH")
+
+    def test_finding_review_does_not_replace_exact_publication_approval(self):
+        finding = self.finding()
+        self.triage.review(finding["entity_id"], finding["payload"]["decision_digest"], "approve", "reviewer")
+        identifier = self.intake(finding["entity_id"])["id"]
+        self.service.acquire(identifier, self.transport, self.http.base, "main")
+        self.service.patch(identifier, PATCH)
+        self.service.validate(identifier, [["python", "-c", "pass"]], IMAGE, Sandbox())
+        plan = self.service.plan(identifier, self.transport, "trio/finding", "Synthetic fix",
+            "Public reviewed body", "Synthetic Human", "human@example.invalid")
+        with self.assertRaises(TrioError):
+            self.service.publish(plan["id"], "operator", self.transport)
+        self.assertFalse(any(row[0] != "GET" for row in self.http.requests))
+        self.service.approve(plan["id"], plan["digest"], "reviewer", "publication-plans")
+        self.assertEqual(self.service.publish(plan["id"], "operator", self.transport)["outcome"], "successful")
