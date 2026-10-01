@@ -6,18 +6,28 @@ never a seal or authority. Publication is closed until exact local policy/approv
 """
 import base64,datetime,hashlib,os,re,selectors,shutil,stat,subprocess,tempfile,time,uuid
 from pathlib import Path
-from .operations import OperationState,repo_name,sha,integer,now,GitHubTransport
+from .operations import OperationState,repo_name,sha,integer,now,GitHubTransport,MAX_OPERATION_RECORD_BYTES
 from .storage import canonical,digest,atomic_json,read_json,confined
 from .errors import TrioError
 
 MAX_FILES=5000;MAX_SOURCE=67108864;MAX_BLOB=16777216;MAX_PATCH=1048576
+MAX_SOURCE_OPT_IN=83886080
+
+def source_budget(value):
+    if type(value) is not int or not 1<=value<=MAX_SOURCE_OPT_IN:raise TrioError("INVALID_SOURCE_LIMIT",exit_code=2)
+    return value
+
+def source_limit(source):
+    # Legacy records retain the original default. A stored null is not omission.
+    return source_budget(source.get("max_source_bytes",MAX_SOURCE))
 
 def path_name(value):
     if not isinstance(value,str) or not value or len(value)>1024 or value.startswith("/") or "\\" in value or any(ord(x)<32 for x in value) or any(x.lower() in {"",".","..",".git"} for x in value.split("/")):raise TrioError("UNSAFE_PATH",exit_code=2)
     return value
 
 def git_object(kind,raw):return hashlib.sha1(kind.encode()+b" "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
-def decode_files(files):
+def decode_files(files,*,max_source_bytes=None):
+    limit=source_budget(MAX_SOURCE if max_source_bytes is None else max_source_bytes)
     if not isinstance(files,dict) or len(files)>MAX_FILES:raise TrioError("SOURCE_CORRUPT")
     result={};total=0
     for name,value in files.items():
@@ -26,7 +36,7 @@ def decode_files(files):
         try:raw=base64.b64decode(value["content"],validate=True)
         except Exception:raise TrioError("SOURCE_CORRUPT") from None
         total+=len(raw)
-        if len(raw)>MAX_BLOB or total>MAX_SOURCE or git_object("blob",raw)!=value["sha"]:raise TrioError("SOURCE_CORRUPT")
+        if len(raw)>MAX_BLOB or total>limit or git_object("blob",raw)!=value["sha"]:raise TrioError("SOURCE_CORRUPT")
         result[name]={"mode":value["mode"],"raw":raw,"sha":value["sha"]}
     validate_source_links(result)
     return result
@@ -87,7 +97,8 @@ def screen_files(files):
     from .team import screen
     for name,value in files.items():screen(name);screen(value["raw"].decode("utf-8",errors="replace"))
 
-def apply_patch(files,patch):
+def apply_patch(files,patch,*,max_source_bytes=None):
+    limit=source_budget(MAX_SOURCE if max_source_bytes is None else max_source_bytes)
     if not isinstance(patch,bytes) or len(patch)>MAX_PATCH:raise TrioError("PATCH_REFUSED",exit_code=2)
     try:lines=patch.decode("utf-8").splitlines(keepends=True)
     except UnicodeError:raise TrioError("PATCH_REFUSED",exit_code=2) from None
@@ -142,7 +153,7 @@ def apply_patch(files,patch):
             del result[old]
         else:result[new]={"mode":result[old]["mode"] if old else "100644","raw":updated,"sha":git_object("blob",updated)}
     if not touched:raise TrioError("PATCH_REFUSED",exit_code=2)
-    encoded=encode_files(result);decode_files(encoded)
+    encoded=encode_files(result);decode_files(encoded,max_source_bytes=limit)
     return encoded,sorted(touched)
 
 class PodmanSandbox:
@@ -209,6 +220,11 @@ def commit_bytes(tree,parent,message,author,date):
     return ("tree "+tree+"\nparent "+parent+"\nauthor "+identity+"\ncommitter "+identity+"\n\n"+message+"\n").encode()
 
 class ContributionService(OperationState):
+    def put(self,kind,identifier,value):
+        # Include encoded content, all metadata and atomic_json's final newline.
+        # Never write a source/patch record that the unchanged reader cannot read.
+        if kind in {"sources","patches"} and len(canonical(value))+1>MAX_OPERATION_RECORD_BYTES:raise TrioError("SOURCE_RECORD_LIMIT")
+        super().put(kind,identifier,value)
     def intake(self,transport,repository,number=None,finding=None):
         repository=repo_name(repository);remote=transport.repository(repository,public=True);identity=transport.identity();details={}
         if bool(number)==bool(finding):raise TrioError("INVALID_INVOCATION",exit_code=2)
@@ -249,11 +265,12 @@ class ContributionService(OperationState):
     def source(self,identifier):
         value=self.get("sources",identifier)
         if value.get("digest")!=digest({k:v for k,v in value.items() if k!="digest"}):raise TrioError("SOURCE_CORRUPT")
-        files=decode_files(value["files"])
+        files=decode_files(value["files"],max_source_bytes=source_limit(value))
         if tree_sha(files)!=value["tree"]:raise TrioError("SOURCE_CORRUPT")
         return value
-    def acquire(self,identifier,transport,base,branch,request_budget=1000):
+    def acquire(self,identifier,transport,base,branch,request_budget=1000,max_source_bytes=None):
         sha(base);self.branch(branch)
+        limit=source_budget(MAX_SOURCE if max_source_bytes is None else max_source_bytes)
         if type(request_budget) is not int or not 3<=request_budget<=10000:raise TrioError("INVALID_INVOCATION",exit_code=2)
         with self.store.write_lock():
             entry=self.get("contributions",identifier);repo=transport.repository(entry["repository"],public=True)
@@ -276,29 +293,29 @@ class ContributionService(OperationState):
                 try:raw=base64.b64decode(blob.get("content","").replace("\n",""),validate=True)
                 except Exception:raise TrioError("SOURCE_CORRUPT") from None
                 total+=len(raw)
-                if len(raw)!=item["size"] or total>MAX_SOURCE or len(files)>=MAX_FILES or git_object("blob",raw)!=item["sha"] or blob.get("sha")!=item["sha"]:raise TrioError("SOURCE_CORRUPT")
+                if len(raw)!=item["size"] or total>limit or len(files)>=MAX_FILES or git_object("blob",raw)!=item["sha"] or blob.get("sha")!=item["sha"]:raise TrioError("SOURCE_CORRUPT")
                 if raw.startswith(b"version https://git-lfs.github.com/spec/v1"):raise TrioError("LFS_UNSUPPORTED")
                 if transport._token in name or transport._token.encode() in raw:raise TrioError("CREDENTIAL_CONTENT")
                 screen_files({name:{"raw":raw}})
                 files[name]={"mode":mode,"raw":raw,"sha":item["sha"]}
             if tree_sha(files)!=root:raise TrioError("SOURCE_CORRUPT")
             validate_source_links(files)
-            encoded=encode_files(files);source={"schema":"trio.public-source/v1","repository":entry["repository"],"repository_id":repo["id"],"base":base,"branch":branch,"tree":root,"files":encoded,"observed_at":now()};source["digest"]=digest(source)
+            encoded=encode_files(files);source={"schema":"trio.public-source/v1","repository":entry["repository"],"repository_id":repo["id"],"base":base,"branch":branch,"tree":root,"files":encoded,"max_source_bytes":limit,"observed_at":now()};source["digest"]=digest(source)
             self.put("sources",identifier,source)
             entry.update(stage="acquired",generation=entry["generation"]+1,source_digest=source["digest"],seal=None,plan=None);self.put("contributions",identifier,entry)
-            return {"schema":"trio.contribution-acquire/v1","id":identifier,"base":base,"tree":root,"files":len(files),"bytes":total,"requests":requests,"source_digest":source["digest"]}
+            return {"schema":"trio.contribution-acquire/v1","id":identifier,"base":base,"tree":root,"files":len(files),"bytes":total,"requests":requests,"max_source_bytes":limit,"source_digest":source["digest"]}
     def patch(self,identifier,patch):
         with self.store.write_lock():
-            entry=self.get("contributions",identifier);source=self.source(identifier);files,touched=apply_patch(decode_files(source["files"]),patch)
-            screen_files(decode_files(files))
-            record={"schema":"trio.patch/v1","contribution":identifier,"source_digest":source["digest"],"patch_sha256":hashlib.sha256(patch).hexdigest(),"patch":base64.b64encode(patch).decode(),"files":files,"tree":tree_sha(decode_files(files)),"paths":touched};record["digest"]=digest(record)
+            entry=self.get("contributions",identifier);source=self.source(identifier);limit=source_limit(source);files,touched=apply_patch(decode_files(source["files"],max_source_bytes=limit),patch,max_source_bytes=limit)
+            screen_files(decode_files(files,max_source_bytes=limit))
+            record={"schema":"trio.patch/v1","contribution":identifier,"source_digest":source["digest"],"patch_sha256":hashlib.sha256(patch).hexdigest(),"patch":base64.b64encode(patch).decode(),"files":files,"tree":tree_sha(decode_files(files,max_source_bytes=limit)),"paths":touched};record["digest"]=digest(record)
             self.put("patches",identifier,record);entry.update(stage="patched",generation=entry["generation"]+1,patch_digest=record["digest"],seal=None,plan=None);self.put("contributions",identifier,entry)
             return {"schema":"trio.contribution-patch/v1","id":identifier,"tree":record["tree"],"patch_sha256":record["patch_sha256"],"paths":touched}
     def patched(self,identifier):
         patch=self.get("patches",identifier);source=self.source(identifier)
         if patch.get("digest")!=digest({k:v for k,v in patch.items() if k!="digest"}) or patch["source_digest"]!=source["digest"]:raise TrioError("PATCH_STALE")
-        files,touched=apply_patch(decode_files(source["files"]),base64.b64decode(patch["patch"],validate=True))
-        if files!=patch["files"] or tree_sha(decode_files(files))!=patch["tree"]:raise TrioError("PATCH_CORRUPT")
+        limit=source_limit(source);files,touched=apply_patch(decode_files(source["files"],max_source_bytes=limit),base64.b64decode(patch["patch"],validate=True),max_source_bytes=limit)
+        if files!=patch["files"] or tree_sha(decode_files(files,max_source_bytes=limit))!=patch["tree"]:raise TrioError("PATCH_CORRUPT")
         return patch,source
     def validate(self,identifier,commands,image,backend=None,timeout=60,memory_mb=512,pids=64,cpus=1):
         if not isinstance(commands,list) or not 1<=len(commands)<=20 or any(not isinstance(x,list) or not x or len(x)>100 or any(not isinstance(y,str) or not y or len(y)>4096 or "\0" in y for y in x) for x in commands):raise TrioError("INVALID_VALIDATION_COMMAND",exit_code=2)
@@ -310,7 +327,7 @@ class ContributionService(OperationState):
             if image not in policy["sandbox_images"]:raise TrioError("SANDBOX_IMAGE_DENIED")
             entry=self.get("contributions",identifier);patch,source=self.patched(identifier)
             entry.update(stage="patched",seal=None);self.put("contributions",identifier,entry)
-            runner=backend or PodmanSandbox();result=runner.run(decode_files(patch["files"]),commands,image,timeout=timeout,memory_mb=memory_mb,pids=pids,cpus=cpus)
+            runner=backend or PodmanSandbox();result=runner.run(decode_files(patch["files"],max_source_bytes=source_limit(source)),commands,image,timeout=timeout,memory_mb=memory_mb,pids=pids,cpus=cpus)
             # Re-read trusted immutable records; sandbox never receives this root.
             after,after_source=self.patched(identifier)
             if after["digest"]!=patch["digest"] or after_source["digest"]!=source["digest"]:raise TrioError("SANDBOX_SOURCE_CHANGED")
@@ -341,7 +358,7 @@ class ContributionService(OperationState):
         with self.store.write_lock():
             entry,seal,patch,source=self.sealed(identifier);identity=transport.identity();upstream=transport.repository(entry["repository"],public=True)
             if upstream["id"]!=entry["repository_id"]:raise TrioError("IDENTITY_MISMATCH")
-            for name,value in decode_files(patch["files"]).items():
+            for name,value in decode_files(patch["files"],max_source_bytes=source_limit(source)).items():
                 if transport._token in name or transport._token.encode() in value["raw"]:raise TrioError("CREDENTIAL_CONTENT")
             policy=self.policy();rule=policy["repositories"].get(entry["repository"],{})
             if rule.get("mode","direct")!=mode:raise TrioError("GATE_CLOSED")
@@ -406,8 +423,8 @@ class ContributionService(OperationState):
         with self.store.write_lock():
             plan=self.get("publication-plans",identifier);self.check_plan(plan);self.require_approval(plan);policy=self.gate(plan,actor,transport,True)
             entry,seal,patch,source=self.sealed(plan["contribution"])
-            screen_files(decode_files(patch["files"]))
-            for name,value in decode_files(patch["files"]).items():
+            screen_files(decode_files(patch["files"],max_source_bytes=source_limit(source)))
+            for name,value in decode_files(patch["files"],max_source_bytes=source_limit(source)).items():
                 if transport._token in name or transport._token.encode() in value["raw"]:raise TrioError("CREDENTIAL_CONTENT")
             if plan["seal_digest"]!=seal["seal_digest"] or plan["generation"]!=entry["generation"]:raise TrioError("SEAL_STALE")
             upstream,destination=self.publication_current(transport,plan,policy)
@@ -444,7 +461,7 @@ class ContributionService(OperationState):
                     if existing.get("id")!=pr["id"] or existing.get("state")!="open" or existing.get("head",{}).get("repo",{}).get("id")!=destination["id"] or existing.get("head",{}).get("sha")!=(plan["commit"] if branch_done else plan["parent"]) or existing.get("base",{}).get("repo",{}).get("id")!=plan["repository_id"] or existing.get("base",{}).get("ref")!=plan["base_branch"]:raise TrioError("PR_CHANGED")
                 self.publication_current(transport,plan,policy)
                 prefix="/repos/"+plan["destination"]
-                original=decode_files(source["files"]);changed=decode_files(patch["files"])
+                original=decode_files(source["files"],max_source_bytes=source_limit(source));changed=decode_files(patch["files"],max_source_bytes=source_limit(source))
                 for name in patch["paths"]:
                     if name not in changed:continue
                     value=changed[name];expected_sha=value["sha"]
@@ -509,9 +526,9 @@ class ContributionService(OperationState):
                 if receipt is not None:step.update(outcome="successful",receipt=receipt,confirmed_at=now())
                 else:step["outcome"]="uncertain"
             journal["outcome"]="successful" if journal["outcome"]=="successful" else "recovered" if all(x["outcome"]=="successful" for x in journal["steps"].values()) else "uncertain";journal["reconciled_at"]=now();self.put("publication-journals",identifier,journal);return journal
-    def refresh(self,identifier,transport,base,branch,request_budget=1000):
+    def refresh(self,identifier,transport,base,branch,request_budget=1000,max_source_bytes=None):
         # Reacquire at explicit exact base, then apply the same reviewed patch.
         # A conflict stops; all prior seals/approvals are invalidated by generation.
         patch,_=self.patched(identifier);raw=base64.b64decode(patch["patch"],validate=True)
-        result=self.acquire(identifier,transport,base,branch,request_budget)
+        result=self.acquire(identifier,transport,base,branch,request_budget,max_source_bytes)
         return {"schema":"trio.contribution-refresh/v1","acquired":result,"patch":self.patch(identifier,raw),"requires_revalidation":True}

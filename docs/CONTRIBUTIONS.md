@@ -233,10 +233,27 @@ target are allowed. Binary patches, unsafe paths, renames, and unsupported mode
 changes remain refused. These are explicit source format limits, not claims
 about the quality of an upstream project.
 
-Existing acquisition bounds still apply: at most 5,000 files, 16 MiB per blob,
-64 MiB total source, and the explicit request budget (default 1,000, maximum
-10,000). Requests account for three metadata reads plus one per file, including
-symlinks. Increasing `--request-budget` does not raise the byte or file caps.
+Acquisition allows at most 5,000 files and 16 MiB per blob. The total raw-source
+budget defaults to 64 MiB (67,108,864 bytes). For an explicitly selected larger
+source, `acquire --max-source-bytes 83886080` opts into the hard maximum of
+80 MiB; smaller positive integer budgets are also accepted. This option does
+not change the file, per-blob, symlink, credential-screening, or request limits.
+
+The chosen byte budget is part of the immutable source digest and is enforced
+again during patch import, replay, and validation. Existing records without a
+budget use the 64 MiB default. Every `refresh` defaults to 64 MiB again; repeat
+the explicit option when the new source needs a larger budget. Refresh still
+requires new validation and approval.
+
+Each serialized source or patch record must also fit the existing 128 MiB
+record-reader bound. The writer checks the exact JSON bytes, including base64
+content, path/metadata overhead, and the final newline, before replacing a
+record. Even a raw source within its selected budget is refused if its full
+record cannot fit. A larger byte budget is not a sandbox or publication grant.
+
+The request budget defaults to 1,000 (maximum 10,000). Requests account for
+three metadata reads plus one per file, including symlinks. Increasing
+`--request-budget` does not implicitly raise the source-byte budget.
 
 Finding intake refuses conflicting revisions or reviews (`CONFLICT`), changed
 or unavailable cited evidence (`PLAN_CHANGED`), and repository identity mismatches

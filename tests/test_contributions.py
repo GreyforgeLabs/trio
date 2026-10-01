@@ -550,3 +550,131 @@ class SourceSymlinkTests(unittest.TestCase):
         with self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main',request_budget=3)
         with patch('trio_triage.contributions.MAX_SOURCE',1),self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main')
         with patch('trio_triage.contributions.MAX_BLOB',1),self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main')
+
+class SourceBudgetTests(unittest.TestCase):
+    def setUp(self):
+        ContributionTests.setUp(self)
+        self.bytes=sum(len(value['raw']) for value in self.http.files.values())
+        self.identifier=self.service.intake(self.transport,'public/project',1)['id']
+
+    def acquire(self,limit=None):
+        return self.service.acquire(self.identifier,self.transport,self.http.base,'main',max_source_bytes=limit)
+
+    def test_invalid_limits_refuse_before_network_or_state_changes(self):
+        from trio_triage.contributions import MAX_SOURCE_OPT_IN,source_budget
+        self.assertEqual(MAX_SOURCE_OPT_IN,80*1024*1024)
+        for limit in (False,True,0,-1,80*1024*1024+1,1.5,'83886080',{},[]):
+            before=list(self.http.requests)
+            with self.subTest(limit=limit),self.assertRaises(TrioError) as error:self.acquire(limit)
+            self.assertEqual(error.exception.code,'INVALID_SOURCE_LIMIT')
+            self.assertEqual(self.http.requests,before)
+            self.assertEqual(self.service.show(self.identifier)['stage'],'queued')
+        self.assertEqual(source_budget(1),1)
+        self.assertEqual(source_budget(MAX_SOURCE_OPT_IN),MAX_SOURCE_OPT_IN)
+
+    def test_cli_defaults_and_catalog_require_explicit_acquire_refresh_opt_in(self):
+        from trio_triage.cli import parser,run
+        from trio_triage.catalog import catalog
+        command=parser()
+        for leaf in ('acquire','refresh'):
+            args=['--home',str(self.store.root),'contribution',leaf,'--id',self.identifier,'--base',self.http.base,'--base-branch','main','--token-env','TRIO_TEST_TOKEN']
+            default=command.parse_args(args)
+            self.assertEqual(default.max_source_bytes,64*1024*1024)
+            selected=command.parse_args([*args,'--max-source-bytes',str(80*1024*1024)])
+            self.assertEqual(selected.max_source_bytes,80*1024*1024)
+            self.assertIn('--max-source-bytes',[flag for arg in catalog(command,'contribution '+leaf)['leaves'][0]['arguments'] for flag in arg['flags']])
+            with patch('trio_triage.operations.GitHubTransport',return_value=self.transport),patch.object(ContributionService,leaf,return_value={'synthetic':True}) as action:
+                self.assertEqual(run(selected,command),{'synthetic':True})
+            self.assertEqual(action.call_args.args[-1],80*1024*1024)
+        self.acquire()
+        self.assertEqual(self.service.source(self.identifier)['max_source_bytes'],64*1024*1024)
+
+    def test_exact_raw_byte_budget_survives_patch_replay_and_validation(self):
+        result=self.acquire(self.bytes)
+        self.assertEqual(result['bytes'],self.bytes)
+        self.assertEqual(result['max_source_bytes'],self.bytes)
+        growing=PATCH.replace(b'answer = 2',b'answer = 22')
+        with self.assertRaises(TrioError):self.service.patch(self.identifier,growing)
+        self.assertEqual(self.service.show(self.identifier)['stage'],'acquired')
+        self.acquire(self.bytes+1)
+        with patch('trio_triage.contributions.MAX_SOURCE',1):
+            self.service.patch(self.identifier,growing)
+            self.service.patched(self.identifier)
+            class Exact(Sandbox):
+                def run(inner,files,commands,image,**limits):
+                    self.assertEqual(sum(len(v['raw']) for v in files.values()),self.bytes+1)
+                    return {'backend':inner.name,'image':image,'outcomes':[{'command':x,'returncode':0,'error':None} for x in commands],'successful':True}
+            self.service.validate(self.identifier,[['synthetic-check']],IMAGE,Exact())
+            self.service.sealed(self.identifier)
+        self.assertTrue(all(request[0]=='GET' for request in self.http.requests))
+
+    def test_saved_limit_is_digest_bound_and_cannot_rescue_a_replayed_patch(self):
+        from trio_triage.storage import digest
+        self.acquire(self.bytes);self.service.patch(self.identifier,PATCH)
+        original=self.service.source(self.identifier)
+        for value,rehash in ((self.bytes+1,False),(self.bytes+1,True),(None,True),(80*1024*1024+1,True)):
+            source=copy.deepcopy(original);source['max_source_bytes']=value
+            if rehash:source['digest']=digest({k:v for k,v in source.items() if k!='digest'})
+            self.service.put('sources',self.identifier,source)
+            with self.subTest(value=value,rehash=rehash),self.assertRaises(TrioError):self.service.patched(self.identifier)
+        self.service.put('sources',self.identifier,original)
+        self.service.patched(self.identifier)
+
+    def test_legacy_sources_use_default_and_refresh_needs_fresh_opt_in(self):
+        from trio_triage.storage import digest
+        self.acquire(self.bytes+1)
+        source=self.service.source(self.identifier);source.pop('max_source_bytes')
+        source['digest']=digest({k:v for k,v in source.items() if k!='digest'})
+        self.service.put('sources',self.identifier,source)
+        self.assertEqual(self.service.source(self.identifier),source)
+        with patch('trio_triage.contributions.MAX_SOURCE',self.bytes-1),self.assertRaises(TrioError):self.service.source(self.identifier)
+        self.acquire(self.bytes+1);self.service.patch(self.identifier,PATCH);self.service.validate(self.identifier,[['synthetic-check']],IMAGE,Sandbox())
+        before=self.service.source(self.identifier)
+        with patch('trio_triage.contributions.MAX_SOURCE',self.bytes-1):
+            with self.assertRaises(TrioError):self.service.refresh(self.identifier,self.transport,self.http.base,'main')
+            self.assertEqual(self.service.source(self.identifier),before)
+            result=self.service.refresh(self.identifier,self.transport,self.http.base,'main',max_source_bytes=self.bytes+1)
+        self.assertEqual(result['acquired']['max_source_bytes'],self.bytes+1)
+        self.assertTrue(result['requires_revalidation'])
+        with self.assertRaises(TrioError):self.service.sealed(self.identifier)
+
+    def test_serialized_json_overhead_and_newline_guard_is_exact_before_writing(self):
+        from trio_triage.storage import canonical
+        value={'files':{'é".txt':{'mode':'100644','sha':git_object('blob',b'ab'),'content':base64.b64encode(b'ab').decode()}},'max_source_bytes':2}
+        size=len(canonical(value))+1
+        self.assertGreater(size,len('é".txt')+len(base64.b64encode(b'ab')))
+        for kind in ('sources','patches'):
+            with self.subTest(kind=kind):
+                with patch('trio_triage.contributions.MAX_OPERATION_RECORD_BYTES',size),patch('trio_triage.operations.MAX_OPERATION_RECORD_BYTES',size):
+                    self.service.put(kind,'boundary',value)
+                    self.assertEqual(self.service.get(kind,'boundary'),value)
+                    self.assertEqual((self.service.root/kind/'boundary.json').stat().st_size,size)
+                before=(self.service.root/kind/'boundary.json').read_bytes()
+                with patch('trio_triage.contributions.MAX_OPERATION_RECORD_BYTES',size-1),self.assertRaises(TrioError) as error:self.service.put(kind,'boundary',value)
+                self.assertEqual(error.exception.code,'SOURCE_RECORD_LIMIT')
+                self.assertEqual((self.service.root/kind/'boundary.json').read_bytes(),before)
+                with patch('trio_triage.contributions.MAX_OPERATION_RECORD_BYTES',size-1),self.assertRaises(TrioError):self.service.put(kind,'new-boundary',value)
+                self.assertFalse((self.service.root/kind/'new-boundary.json').exists())
+
+    def test_eighty_mib_exact_boundary_and_real_base64_record_round_trip(self):
+        from trio_triage.contributions import MAX_SOURCE,MAX_SOURCE_OPT_IN,MAX_BLOB,MAX_OPERATION_RECORD_BYTES
+        from trio_triage.storage import canonical
+        self.assertEqual((MAX_SOURCE,MAX_SOURCE_OPT_IN,MAX_BLOB,MAX_OPERATION_RECORD_BYTES),(64*1024*1024,80*1024*1024,16*1024*1024,128*1024*1024))
+        raw=b'x'*MAX_BLOB;content=base64.b64encode(raw).decode();blob=git_object('blob',raw)
+        encoded={f'file-{i}.bin':{'mode':'100644','sha':blob,'content':content} for i in range(5)}
+        with self.assertRaises(TrioError):decode_files(encoded)
+        decoded=decode_files(encoded,max_source_bytes=MAX_SOURCE_OPT_IN)
+        self.assertEqual(sum(len(v['raw']) for v in decoded.values()),MAX_SOURCE_OPT_IN)
+        del decoded
+        over={**encoded,'one-byte':{'mode':'100644','sha':git_object('blob',b'x'),'content':'eA=='}}
+        with self.assertRaises(TrioError):decode_files(over,max_source_bytes=MAX_SOURCE_OPT_IN)
+        value={'files':encoded,'max_source_bytes':MAX_SOURCE_OPT_IN}
+        encoded_bytes=5*(4*((MAX_BLOB+2)//3))
+        size=len(canonical(value))+1
+        self.assertEqual(encoded_bytes,5*len(content))
+        self.assertGreater(size,encoded_bytes)
+        self.assertLess(size,MAX_OPERATION_RECORD_BYTES)
+        self.service.put('sources','maximum-source-fixture',value)
+        path=self.service.root/'sources'/'maximum-source-fixture.json'
+        self.assertEqual(path.stat().st_size,size)
+        self.assertEqual(self.service.get('sources','maximum-source-fixture'),value)

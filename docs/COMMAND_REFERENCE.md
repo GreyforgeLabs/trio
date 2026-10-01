@@ -891,8 +891,11 @@ Acquire verified public Git objects for an exact base SHA/branch under a request
 
 Preserves regular/executable files and relative symlinks ending at tracked
 in-tree regular files. Unsafe, dangling, cyclic, directory-target, and overlong
-links are refused. Caps remain 5,000 files, 16 MiB per blob, and 64 MiB total;
-the request budget covers three metadata reads plus one read per file.
+links are refused. Caps remain 5,000 files and 16 MiB per blob. Total source
+defaults to 64 MiB; `--max-source-bytes` explicitly permits at most 80 MiB.
+The selected budget is digest-bound and enforced through patch validation.
+Full source/patch JSON records must fit the unchanged 128 MiB reader limit.
+The request budget covers three metadata reads plus one read per file.
 
 Declared effect: `read-github+write-local`. Network: `github-read`.
 Output schema: `trio.contribution-acquire/v1`. Explicit authorization declared: no.
@@ -904,6 +907,7 @@ Output schema: `trio.contribution-acquire/v1`. Explicit authorization declared: 
 | `--base` | yes | — |
 | `--base-branch` | yes | — |
 | `--request-budget` | no | default `1000`; integer |
+| `--max-source-bytes` | no | default `67108864`; integer `1..83886080` |
 
 Inspect help: `trio contribution acquire --help`.
 
@@ -1049,6 +1053,10 @@ Inspect help: `trio contribution revise --help`.
 
 Acquire a new upstream base and reapply the saved patch; new validation/approval are required.
 
+The source-byte budget defaults to 64 MiB on each refresh. Repeat an explicit
+`--max-source-bytes` value when opting into a larger source, up to 80 MiB; the
+previous source budget is never implicitly inherited.
+
 Declared effect: `read-github+write-local`. Network: `github-read`.
 Output schema: `trio.contribution-refresh/v1`. Explicit authorization declared: no.
 
@@ -1059,6 +1067,7 @@ Output schema: `trio.contribution-refresh/v1`. Explicit authorization declared: 
 | `--base` | yes | — |
 | `--base-branch` | yes | — |
 | `--request-budget` | no | default `1000`; integer |
+| `--max-source-bytes` | no | default `67108864`; integer `1..83886080` |
 
 Inspect help: `trio contribution refresh --help`.
 
