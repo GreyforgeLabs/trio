@@ -123,7 +123,7 @@ class ContributionTests(unittest.TestCase):
             with self.subTest(patch=bad),self.assertRaises(TrioError):apply_patch(files,bad)
         identifier,_=self.prepared();seal=self.service.get("seals",identifier);seal["tree"]="f"*40;self.service.put("seals",identifier,seal)
         with self.assertRaises(TrioError):self.service.sealed(identifier)
-    def test_truncated_tree_and_symlink_submodule_refusal(self):
+    def test_truncated_tree_and_corrupt_symlink_submodule_refusal(self):
         for mode,kind in (("120000","blob"),("160000","commit")):
             with self.subTest(mode=mode):
                 identifier=self.service.intake(self.transport,"public/project",1)["id"]
@@ -412,3 +412,141 @@ class FindingIntakeTests(unittest.TestCase):
         self.assertFalse(any(row[0] != "GET" for row in self.http.requests))
         self.service.approve(plan["id"], plan["digest"], "reviewer", "publication-plans")
         self.assertEqual(self.service.publish(plan["id"], "operator", self.transport)["outcome"], "successful")
+
+
+class SourceSymlinkTests(unittest.TestCase):
+    """Symlink handling uses synthetic Git objects and never runs source code."""
+    def setUp(self):
+        ContributionTests.setUp(self)
+
+    def source_files(self,links=None):
+        files=copy.deepcopy(self.http.files)
+        # Same public link path/bytes as Omarchy tree 8b4eae66; target is synthetic.
+        files['icon.png']={'mode':'100644','raw':b'synthetic image bytes'}
+        for name,target in (links or {'default/chromium/extensions/copy-url/icon.png':b'../../../../icon.png'}).items():
+            files[name]={'mode':'120000','raw':target}
+        for value in files.values():value['sha']=git_object('blob',value['raw'])
+        return files
+
+    def install_source(self,files):
+        self.http.files=copy.deepcopy(files);root=tree_sha(files)
+        self.http.trees[root]=copy.deepcopy(files)
+        self.http.blobs.update({v['sha']:v['raw'] for v in files.values()})
+        self.http.commits[self.http.base]['tree']['sha']=root
+        return root
+
+    def acquire(self,files):
+        root=self.install_source(files)
+        identifier=self.service.intake(self.transport,'public/project',1)['id']
+        result=self.service.acquire(identifier,self.transport,self.http.base,'main')
+        return identifier,result,root
+
+    def sandbox(self,files,directory):
+        from contextlib import nullcontext
+        directory.mkdir()
+        with patch('trio_triage.contributions.shutil.which',return_value='/synthetic/podman'),patch('trio_triage.contributions.tempfile.TemporaryDirectory',return_value=nullcontext(str(directory))),patch('trio_triage.contributions.subprocess.Popen') as process:
+            result=PodmanSandbox().run(files,[],IMAGE)
+            process.assert_not_called()
+            return result
+
+    def test_omarchy_shaped_acquisition_preserves_exact_git_identity(self):
+        files=self.source_files();link='default/chromium/extensions/copy-url/icon.png'
+        self.assertEqual(files[link]['sha'],'e088259ef984026d5dc195ae1879564e7e1a4750')
+        identifier,result,root=self.acquire(files)
+        source=self.service.source(identifier)
+        self.assertEqual(result['tree'],root)
+        self.assertEqual(result['base'],self.http.base)
+        self.assertEqual(decode_files(source['files']),files)
+        self.assertEqual(source['repository_id'],self.http.repo['id'])
+        self.assertEqual(source['files'][link]['mode'],'120000')
+        self.assertTrue(all(request[0]=='GET' for request in self.http.requests))
+        patched=self.service.patch(identifier,PATCH)
+        self.assertEqual(self.service.patched(identifier)[0]['files'][link],source['files'][link])
+        self.assertNotEqual(patched['tree'],root)
+        self.service.validate(identifier,[['synthetic-check']],IMAGE,Sandbox())
+        self.assertEqual(self.service.get('seals',identifier)['tree'],patched['tree'])
+        self.service.sealed(identifier)
+
+    def test_relative_chains_and_executable_targets_materialize_without_dereference(self):
+        files=self.source_files({'first':b'./docs/second','docs/second':b'../answer.py'})
+        files['answer.py']['mode']='100755'
+        files=dict(reversed(list(files.items())))  # Links precede their targets.
+        self.assertEqual(decode_files(encode_files(files)),files)
+        result=self.sandbox(files,self.root/'sandbox');work=self.root/'sandbox'/'work'
+        self.assertTrue(result['successful'])
+        self.assertTrue((work/'first').is_symlink())
+        self.assertEqual(os.readlink(work/'first'),'./docs/second')
+        self.assertEqual(os.readlink(work/'docs/second'),'../answer.py')
+        self.assertEqual((work/'first').read_bytes(),files['answer.py']['raw'])
+        self.assertEqual((work/'answer.py').stat().st_mode&0o777,0o755)
+
+    def test_unsafe_targets_fail_closed_before_source_record_or_host_writes(self):
+        targets=(b'/etc/passwd',b'../outside',b'../../icon.png',b'C:/outside',b'C:\\outside',b'//outside',b'icon.png\0suffix',b'icon.png\n',b'icon.png\x7f',b'\xff',b'',b'x'*1025,b'.git/config',b'.GiT/../icon.png',b'missing',b'docs',b'icon.png/../answer.py',b'missing/../icon.png',b'docs//readme.txt',b'icon.png/')
+        sentinel=self.root/'outside';sentinel.write_bytes(b'unchanged')
+        for target in targets:
+            with self.subTest(target=target):
+                files=self.source_files({'link':target})
+                with self.assertRaises(TrioError):decode_files(encode_files(files))
+                self.install_source(files);identifier=self.service.intake(self.transport,'public/project',1)['id']
+                with self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main')
+                self.assertEqual(self.service.show(identifier)['stage'],'queued')
+                self.assertFalse((self.service.root/'sources'/f'{identifier}.json').exists())
+                with patch('trio_triage.contributions.shutil.which',return_value='/synthetic/podman'),patch('trio_triage.contributions.tempfile.TemporaryDirectory') as temporary,self.assertRaises(TrioError):PodmanSandbox().run(files,[],IMAGE)
+                temporary.assert_not_called()
+                self.assertEqual(sentinel.read_bytes(),b'unchanged')
+
+    def test_cycles_directory_aliases_and_link_ancestor_collisions_are_rejected(self):
+        cases=({'link':b'link'},{'first':b'second','second':b'first'},{'alias':b'docs','link':b'alias/readme.txt'},{'alias':b'docs','link':b'alias/../icon.png'},{'link':b'icon.png','link/child':b'../answer.py'})
+        for links in cases:
+            with self.subTest(links=links),self.assertRaises(TrioError):decode_files(encode_files(self.source_files(links)))
+        links={f'link{i}':f'link{i+1}'.encode() for i in range(39)};links['link39']=b'icon.png'
+        decode_files(encode_files(self.source_files(links)))
+        links['start']=b'link0'
+        with self.assertRaises(TrioError):decode_files(encode_files(self.source_files(links)))
+
+    def test_patches_cannot_edit_delete_create_links_or_leave_dangling_targets(self):
+        files=self.source_files({'link':b'answer.py'})
+        changes=(b'--- a/link\n+++ b/link\n@@ -1 +1 @@\n-answer.py\n\\ No newline at end of file\n+icon.png\n\\ No newline at end of file\n',b'--- a/link\n+++ /dev/null\n@@ -1 +0,0 @@\n-answer.py\n\\ No newline at end of file\n',b'new file mode 120000\n--- /dev/null\n+++ b/new-link\n@@ -0,0 +1 @@\n+answer.py\n',b'--- /dev/null\n+++ b/link/child\n@@ -0,0 +1 @@\n+public\n',b'--- a/answer.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-answer = 1\n')
+        for change in changes:
+            with self.subTest(change=change),self.assertRaises(TrioError):apply_patch(files,change)
+
+    def test_link_bytes_and_modes_remain_integrity_checked(self):
+        identifier,_,_=self.acquire(self.source_files())
+        source=self.service.source(identifier);link='default/chromium/extensions/copy-url/icon.png'
+        for field,value in [('sha','f'*40),('mode','100644'),('content',base64.b64encode(b'../../../../answer.py').decode())]:
+            changed=copy.deepcopy(source);changed['files'][link][field]=value
+            from trio_triage.storage import digest
+            changed['digest']=digest({k:v for k,v in changed.items() if k!='digest'})
+            self.service.put('sources',identifier,changed)
+            with self.subTest(field=field),self.assertRaises(TrioError):self.service.source(identifier)
+        self.service.put('sources',identifier,source)
+
+    def test_host_integrity_read_never_follows_changed_links_or_directories(self):
+        files=self.source_files({'link':b'answer.py'});outside=self.root/'outside';outside.mkdir();(outside/'sentinel').write_bytes(b'unchanged')
+        original_walk=os.walk
+        for mutation in ('link','file','directory','mode','fifo'):
+            directory=self.root/('sandbox-'+mutation)
+            def altered_walk(work,**kwargs):
+                if mutation=='link':
+                    (work/'link').unlink();(work/'link').symlink_to(outside/'sentinel')
+                elif mutation=='file':
+                    (work/'answer.py').unlink();(work/'answer.py').symlink_to(outside/'sentinel')
+                elif mutation=='directory':
+                    (work/'docs'/'readme.txt').unlink();(work/'docs').rmdir();(work/'docs').symlink_to(outside,target_is_directory=True)
+                elif mutation=='mode':(work/'answer.py').chmod(0o755)
+                else:os.mkfifo(work/'unexpected')
+                return original_walk(work,**kwargs)
+            original_read=Path.read_bytes
+            def guarded_read(path):
+                self.assertTrue(path.resolve().is_relative_to(directory))
+                return original_read(path)
+            with self.subTest(mutation=mutation),patch('trio_triage.contributions.os.walk',side_effect=altered_walk),patch.object(Path,'read_bytes',guarded_read),self.assertRaises(TrioError) as error:self.sandbox(files,directory)
+            self.assertEqual(error.exception.code,'SANDBOX_SOURCE_CHANGED')
+            self.assertEqual((outside/'sentinel').read_bytes(),b'unchanged')
+
+    def test_existing_source_limits_remain_enforced(self):
+        files=self.source_files();self.install_source(files)
+        identifier=self.service.intake(self.transport,'public/project',1)['id']
+        with self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main',request_budget=3)
+        with patch('trio_triage.contributions.MAX_SOURCE',1),self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main')
+        with patch('trio_triage.contributions.MAX_BLOB',1),self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main')

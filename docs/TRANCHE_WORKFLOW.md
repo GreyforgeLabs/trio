@@ -143,16 +143,26 @@ by `handoff tranche`.
 
 This integration stops at evidence-backed review coordination. Source/patch
 validation and publication use their existing separate gates. In particular,
-Trio contribution acquisition still refuses symlinks, submodules, LFS pointers,
-and unsupported source entries. Do not bypass that by unsafe extraction or by
-claiming that a review group is a validated source bundle. Omarchy source
-trees containing symlinks cannot yet traverse that contribution-acquisition
-path unchanged.
+Trio contribution acquisition preserves relative symlinks ending at tracked
+in-tree regular files, but refuses unsafe, dangling, cyclic, directory-target,
+and overlong links, submodules, LFS pointers, and unsupported source entries.
+Do not bypass that by unsafe extraction or by claiming that a review group is
+a validated source bundle.
+
+Symlink support alone does not qualify a complete Omarchy acquisition. Its
+[tree `8b4eae66da2938ba9559f103b18dbf85cdf28a70`](https://api.github.com/repos/omacom/omarchy/git/trees/8b4eae66da2938ba9559f103b18dbf85cdf28a70?recursive=1)
+contains 1,953 blobs totaling 77,363,647 bytes, exceeding the unchanged 64 MiB
+source cap (67,108,864 bytes). It would also need at least 1,956 requests,
+above the default 1,000 request budget. `--request-budget 1956` addresses only
+that request limit; no current CLI option raises the source-byte cap. The
+Omarchy-shaped symlink regression uses synthetic target bytes and is not a
+full-tree or live-container qualification.
 
 Synthetic integration tests cover revision drift, stale generations,
 uncertainty preservation, request bounds, partial capture/resume, replay,
 crash recovery, unsafe paths, and unrecognized dependency code. The existing
-contribution suite verifies symlink/submodule refusal. Tests use no model
+contribution suite verifies safe file-link preservation, unsafe-link/submodule
+refusal, and immutable source checks. Tests use no model
 credentials, live GitHub calls, or GitHub mutations. Classifier evaluation,
 live model/mutation qualification and automatic scheduling are separate work.
 The provider-aware compatibility check exercises real, separately installed

@@ -72,9 +72,11 @@ does not authorize a GitHub write. See [evidence and teams](USER_GUIDE.md).
   branch deletion, or release creation/upload command is provided.
 - Team bundles are not cryptographically signed. Local role configuration
   is cooperative and does not authenticate a person who controls the files.
-- Source symlinks, submodules, LFS pointers, unsupported entries, and unsafe
-  paths cannot be sealed as contribution source. Patching supports constrained
-  text changes, not arbitrary Git operations or binary patches.
+- Relative source symlinks ending at tracked in-tree regular files are preserved.
+  Unsafe, dangling, cyclic, directory-target, and overlong links, submodules,
+  LFS pointers, unsupported entries, and unsafe paths cannot be sealed.
+  Patching supports constrained regular-file text changes and preserves existing
+  links; it cannot create, edit, or delete links or leave their targets dangling.
 - Sandbox commands must work with a preinstalled digest-pinned image and no
   network. Trio does not install the project's dependencies during validation.
 - Local-finding contribution intake requires non-conflicting, non-stale evidence

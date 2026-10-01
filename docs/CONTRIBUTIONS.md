@@ -217,10 +217,26 @@ unrelated branch to make a plan pass.
 
 ## Limitations to inspect before choosing this workflow
 
-The current source acquisition refuses symlinks, submodules, LFS pointers,
-truncated trees, and unsupported entries. Patch import refuses binary patches,
-unsafe paths, renames, and unsupported mode changes. These are explicit source
-format limits, not claims about the quality of an upstream project.
+Source acquisition preserves regular files, executable files, and relative
+symlinks whose complete chain ends at a tracked regular file within the source
+tree. Link paths, target bytes, modes, and Git object identities are retained;
+targets are not downloaded or copied through the link. Links are checked before
+any sandbox files are written and created only after regular files. Host
+integrity checks read link bytes without following them.
+
+Absolute, escaping, dangling, cyclic, overlong, and directory-target links are
+refused, including paths that traverse a link ancestor. Chains may contain at
+most 40 links. Submodules, LFS pointers, truncated trees, and unsupported entries
+remain unsupported. Patch import cannot create, edit, or delete symlinks, leave
+their targets dangling, or write beneath a link; edits to a tracked regular
+target are allowed. Binary patches, unsafe paths, renames, and unsupported mode
+changes remain refused. These are explicit source format limits, not claims
+about the quality of an upstream project.
+
+Existing acquisition bounds still apply: at most 5,000 files, 16 MiB per blob,
+64 MiB total source, and the explicit request budget (default 1,000, maximum
+10,000). Requests account for three metadata reads plus one per file, including
+symlinks. Increasing `--request-budget` does not raise the byte or file caps.
 
 Finding intake refuses conflicting revisions or reviews (`CONFLICT`), changed
 or unavailable cited evidence (`PLAN_CHANGED`), and repository identity mismatches
