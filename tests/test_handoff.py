@@ -356,6 +356,87 @@ class HandoffTests(unittest.TestCase):
         self.assertTrue(result["complete"], result["error"])
         export.assert_called_once_with("selected-checkout", "B001")
 
+    def check_cli_finding_intake(self, source_root, expected):
+        """Exercise public JSON CLI output between each independently gated step."""
+        import io
+        import json
+        import os
+        import sys
+        from trio_triage.cli import main
+        from trio_triage.contributions import ContributionService
+        from trio_triage.operations import GitHubTransport
+        from test_operations import Response
+
+        requests = []
+        class IntakeHTTP:
+            def open(self, request, timeout=None):
+                requests.append((request.get_method(), request.full_url))
+                assert request.get_method() == "GET", "intake cannot write to GitHub"
+                if request.full_url == "https://api.github.com/user":
+                    return Response({"id": 7, "login": "synthetic-reviewer"})
+                assert request.full_url == "https://api.github.com/repos/example/project"
+                return Response(copy.deepcopy(REPO))
+
+        def invoke(argv, success=True):
+            wire = io.BytesIO()
+            output = io.TextIOWrapper(wire, encoding="utf-8")
+            with patch.object(sys, "stdout", output):
+                code = main(["--home", str(self.store.root), "--config-location", str(self.root / "config"),
+                             *argv, "--max-bytes", "1048576", "--json"])
+            output.flush()
+            result = json.loads(wire.getvalue())
+            self.assertEqual(code == 0, success, result)
+            return result
+
+        for command in ("handoff tranche", "handoff show", "group show", "finding propose",
+                        "finding show", "contribution intake", "contribution show"):
+            invoke(["commands", "--command", command])
+        with patch("trio_triage.transport.ReadTransport", return_value=self.reader):
+            handoff = invoke(["handoff", "tranche", "--dataset", self.dataset, "--actor", "bridge",
+                              "--tranche-root", str(source_root), "--batch", "B001"])
+        self.assertTrue(handoff["complete"])
+        observed = invoke(["handoff", "show", "--id", handoff["id"]])
+        self.assertEqual(observed["envelope"], expected)
+        group = invoke(["group", "show", "--id", handoff["group_id"]])["heads"][0]
+        self.assertEqual(group["payload"]["status"], "draft")
+        self.assertEqual(group["actor"]["kind"], "agent")
+        self.assertTrue(group["evidence_refs"])
+        items, refs = self.root / "items.json", self.root / "refs.json"
+        atomic_json(items, group["payload"]["members"])
+        atomic_json(refs, group["evidence_refs"])
+        finding = invoke(["finding", "propose", "--category", "insufficient_evidence",
+                          "--items", str(items), "--refs", str(refs), "--actor", "bridge",
+                          "--author-kind", "agent", "--rationale", "Synthetic follow-up; model claims remain unverified"])
+        selected = invoke(["finding", "show", "--id", finding["entity_id"]])
+        self.assertFalse(selected["stale"])
+        self.assertFalse(selected["reviews"])
+        with patch.dict(os.environ, {"TRIO_HANDOFF_TEST_TOKEN": "synthetic-workflow-credential"}):
+            transport = GitHubTransport("TRIO_HANDOFF_TEST_TOKEN", opener=IntakeHTTP())
+            with patch("trio_triage.operations.GitHubTransport", return_value=transport):
+                invalid = invoke(["contribution", "intake", "--repository", "example/project",
+                                  "--finding", handoff["group_id"], "--token-env", "TRIO_HANDOFF_TEST_TOKEN"], success=False)
+                self.assertEqual(invalid["error"]["code"], "INVALID_TARGET")
+                entry = invoke(["contribution", "intake", "--repository", "example/project",
+                                "--finding", finding["entity_id"], "--token-env", "TRIO_HANDOFF_TEST_TOKEN"])
+        self.assertEqual(entry["stage"], "queued")
+        self.assertEqual(entry["intake"]["finding_revision"], finding["event_id"])
+        self.assertEqual(entry["intake"]["decision_digest"], finding["payload"]["decision_digest"])
+        self.assertEqual(entry["intake"]["selection_digest"], digest(selected))
+        self.assertEqual(invoke(["contribution", "show", "--id", entry["id"]]), entry)
+        contributions = ContributionService(self.store)
+        for directory in ("sources", "validations", "approvals", "publication-plans", "publication-journals"):
+            self.assertFalse((contributions.root / directory).exists(), directory)
+        self.assertFalse(self.store.config["writes_enabled"])
+        self.assertFalse(contributions.policy()["publication_enabled"])
+        self.assertEqual(sorted(event["operation"] for event in TeamService(self.store).events()), ["finding", "group"])
+        self.assertTrue(requests)
+        return entry
+
+    def test_cli_provider_handoff_group_finding_intake_preserves_authority_boundaries(self):
+        selected = provider_envelope()
+        with patch.object(producer, "read_selected_batch", return_value=selected):
+            self.check_cli_finding_intake("selected-checkout", selected)
+
 
 class ProducerTests(unittest.TestCase):
     def setUp(self):
@@ -521,6 +602,15 @@ def check_installed_producer(source_root):
                     assert fixture.service.run(plan["id"], fixture.reader)["requests"] == 0
                 finally:
                     fixture.doCleanups()
+                workflow = HandoffTests()
+                workflow.setUp()
+                try:
+                    # The production loader already checked this source above;
+                    # retain its synthetic runtime paths for the full CLI flow.
+                    with patch.object(producer, "load_tranche", return_value=api):
+                        workflow.check_cli_finding_intake(source_root, value)
+                finally:
+                    workflow.doCleanups()
                 if mode == "category":
                     # A changed config/descriptor cannot relabel an old report.
                     saved = read_json(out / "summary.json")
@@ -544,7 +634,8 @@ def check_installed_producer(source_root):
                     except TrioError as error:
                         assert error.code == "HANDOFF_STALE", error.code
                 results.append({"mode": mode, "schema": value["schema"], "members": value["batch"]["members"],
-                                "references": 6, "draft_group": True, "result": "PASS"})
+                                "references": 6, "draft_group": True, "cli_finding_intake": "queued",
+                                "publication_enabled": False, "result": "PASS"})
     print(json.dumps({"producer_blob": api._trio_source_blob, "checks": results}))
 
 

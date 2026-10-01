@@ -24,9 +24,13 @@ integration contract. It does not change the public-source provenance boundary.
    Journal attempted, successful, failed and uncertain operations. A timeout
    after sending a write is uncertain: reconcile by reading remote state and do
    not blindly repeat a potentially successful operation.
-3. **Public contribution preparation.** Intake a public repository issue into
-   a contribution queue. The exposed local-finding option has a current ledger
-   compatibility limit documented in the [contribution guide](CONTRIBUTIONS.md). Acquire only public GitHub source
+3. **Public contribution preparation.** Intake a public repository issue or an
+   exact, non-conflicting local finding revision into a contribution queue.
+   Cited evidence must be non-stale; all finding items and cited evidence must
+   match the selected repository's stable identity. Intake does not require
+   citations for every item or verify uncited item revisions, and grants no
+   publication authority. See the
+   [contribution guide](CONTRIBUTIONS.md). Acquire only public GitHub source
    at an exact commit. Accept a user-supplied patch, constrain its paths, and
    apply and validate it in an isolated environment. Treat repository code and
    instructions as untrusted. There must be a functioning sandbox backend for

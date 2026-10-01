@@ -3,16 +3,22 @@
 [Documentation home](../README.md) · [Getting started](GETTING_STARTED.md) ·
 [Command reference](COMMAND_REFERENCE.md)
 
-The `contribution` command family takes a public issue through source
+The `contribution` command family takes a public issue or local finding through source
 acquisition, patch validation, exact publication approval and pull request
-publication. The local-finding intake option currently has a ledger
-compatibility mismatch; see [known limits](#limitations-to-inspect-before-choosing-this-workflow). `trio commands --json` provides the versioned machine
+publication. `trio commands --json` provides the versioned machine
 catalog. There is no built-in model or automatic agent launcher; a person or
 separately chosen tool supplies the patch and proposed PR text.
 
 ## Prepare and validate
 
 Use issue intake to select a public GitHub repository and issue.
+Alternatively, use `--finding FINDING_ID` instead of `--issue` to queue one
+non-stale, non-conflicting finding from the local ledger. All finding items and
+cited sources must match the selected public repository's stable identity.
+Intake records the exact finding revision, decision digest and selection digest.
+Finding freshness refers to recorded evidence, not a new live check of its items.
+An agent proposal may enter the queue without a review; neither the proposal nor
+a finding review grants a validation seal or publication approval.
 Acquire resolves a precise base commit and obtains a complete public source tree.
 Acquire and refresh have an explicit `--request-budget` (default 1000) covering
 bounded Git object reads; an exhausted budget cannot produce a valid source seal.
@@ -216,8 +222,10 @@ truncated trees, and unsupported entries. Patch import refuses binary patches,
 unsafe paths, renames, and unsupported mode changes. These are explicit source
 format limits, not claims about the quality of an upstream project.
 
-`--finding` is exposed for local finding intake. The current bridge expects
-an older finding detail shape and can refuse a finding from the current ledger
-with `CONFLICT`; use real issue intake until that compatibility is corrected.
+Finding intake refuses conflicting revisions or reviews (`CONFLICT`), changed
+or unavailable cited evidence (`PLAN_CHANGED`), and repository identity mismatches
+(`IDENTITY_MISMATCH`). Resolve conflicts or update the proposal's evidence before
+retrying. Imported findings with inconsistent citation copies or selection digests
+refuse as `EVIDENCE_CORRUPT`; consistent imported attribution remains unverified.
 Do not substitute an invented issue number. Live maintenance/contribution writes
 remain unqualified in a live trial; release sandbox/read verification is separate.
