@@ -258,7 +258,10 @@ Inspect help: `trio corpus plan --help`.
 
 ## corpus run
 
-Acquire or explicitly resume that frozen corpus under a request budget.
+Acquire or explicitly resume unfinished members of that frozen corpus under a
+request budget. Completed members retain their recorded observations. Add
+`--refresh` once to request new observations for all frozen members, then resume
+remaining work without it after a budget stop or interruption.
 
 Declared effect: `read-github+write-local`. Network: `github-read`.
 Output schema: `trio.corpus-run/v1`. Explicit authorization declared: no.
@@ -269,6 +272,7 @@ Output schema: `trio.corpus-run/v1`. Explicit authorization declared: no.
 | `--corpus` | yes | — |
 | `--read-token-env` | no | — |
 | `--request-budget` | no | integer |
+| `--refresh` | no | flag, default `false` |
 
 Inspect help: `trio corpus run --help`.
 

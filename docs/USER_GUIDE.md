@@ -97,6 +97,16 @@ planning. Run the same corpus explicitly to resume; it does not add new members
 silently. Changed acquisition progress needs a fresh index and invalidates old
 search cursors. Inspect status/coverage after interruption or budget exhaustion.
 
+`corpus run` resumes unfinished members and retries partial or failed captures,
+prioritizing the least-attempted members so small request budgets can make progress.
+Completed members keep their recorded observations; completion does not establish
+current visibility or freshness. A completed run with no remaining work makes no
+requests and preserves its checkpoint. To request new observations for every frozen
+member, add `--refresh` once, then use ordinary `corpus run` to continue after a
+budget stop or interruption. Outstanding refresh work is recorded as `gaps` with
+`refresh requested`; older immutable snapshots remain inspectable until replaced
+in corpus progress. Repeating `--refresh` requests another full refresh.
+
 ## Import an offline cache
 
 Import accepts the supported public donor cache format, not arbitrary JSON.
