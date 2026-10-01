@@ -2,7 +2,7 @@
 
 [Documentation home](../README.md) · [Getting started](GETTING_STARTED.md) · [Feature guide](FEATURES.md)
 
-This reference covers all **62** current Trio command leaves. Arguments, defaults,
+This reference covers all **66** current Trio command leaves. Arguments, defaults,
 choices, effects, and schemas were checked against the parser/catalog. It documents
 the current public Trio CLI. Start with the [quickstart](GETTING_STARTED.md) if
 you are installing it for the first time.
@@ -846,7 +846,10 @@ Inspect help: `trio ops reconcile --help`.
 
 ## contribution intake
 
-Start from a real public issue or a local finding ID; current finding bridge has a documented compatibility limit.
+Start from a real public issue or a non-stale, non-conflicting local finding ID.
+Finding items and cited sources must match the selected repository's stable
+identity. Intake records the exact revision and digests without granting
+validation or publication authority.
 
 Declared effect: `read-github+write-local`. Network: `github-read`.
 Output schema: `trio.contribution/v1`. Explicit authorization declared: no.
@@ -890,6 +893,14 @@ Inspect help: `trio contribution show --help`.
 
 Acquire verified public Git objects for an exact base SHA/branch under a request budget.
 
+Preserves regular/executable files and relative symlinks ending at tracked
+in-tree regular files. Unsafe, dangling, cyclic, directory-target, and overlong
+links are refused. Caps remain 5,000 files and 16 MiB per blob. Total source
+defaults to 64 MiB; `--max-source-bytes` explicitly permits at most 80 MiB.
+The selected budget is digest-bound and enforced through patch validation.
+Full source/patch JSON records must fit the unchanged 128 MiB reader limit.
+The request budget covers three metadata reads plus one read per file.
+
 Declared effect: `read-github+write-local`. Network: `github-read`.
 Output schema: `trio.contribution-acquire/v1`. Explicit authorization declared: no.
 
@@ -900,12 +911,17 @@ Output schema: `trio.contribution-acquire/v1`. Explicit authorization declared: 
 | `--base` | yes | — |
 | `--base-branch` | yes | — |
 | `--request-budget` | no | default `1000`; integer |
+| `--max-source-bytes` | no | default `67108864`; integer `1..83886080` |
 
 Inspect help: `trio contribution acquire --help`.
 
 ## contribution patch
 
 Apply a reviewed constrained unified text patch to acquired source.
+
+Only regular-file text changes are supported. Existing symlinks are preserved;
+creating, editing, or deleting a link, writing beneath one, or leaving a link
+target dangling is refused.
 
 Declared effect: `write-local`. Network: `none`.
 Output schema: `trio.contribution-patch/v1`. Explicit authorization declared: no.
@@ -1041,6 +1057,10 @@ Inspect help: `trio contribution revise --help`.
 
 Acquire a new upstream base and reapply the saved patch; new validation/approval are required.
 
+The source-byte budget defaults to 64 MiB on each refresh. Repeat an explicit
+`--max-source-bytes` value when opting into a larger source, up to 80 MiB; the
+previous source budget is never implicitly inherited.
+
 Declared effect: `read-github+write-local`. Network: `github-read`.
 Output schema: `trio.contribution-refresh/v1`. Explicit authorization declared: no.
 
@@ -1051,5 +1071,45 @@ Output schema: `trio.contribution-refresh/v1`. Explicit authorization declared: 
 | `--base` | yes | — |
 | `--base-branch` | yes | — |
 | `--request-budget` | no | default `1000`; integer |
+| `--max-source-bytes` | no | default `67108864`; integer `1..83886080` |
 
 Inspect help: `trio contribution refresh --help`.
+
+## Tranche interoperability
+
+See the [Tranche workflow](TRANCHE_WORKFLOW.md) for the supported dependency
+pin, versioned handoff contract, and complete recovery examples.
+
+### handoff tranche
+
+`trio handoff tranche --dataset DATASET_ID --tranche-root CHECKOUT --batch BATCH_ID --actor ACTOR [--read-token-env NAME] [--request-budget 100]`
+
+Effect: pinned local dependency code + GitHub reads + local state writes.
+Reads a separately installed supported Tranche source and report, verifies its
+current generation, then captures exact revisions and creates a draft group.
+No model calls or GitHub writes. Output: `trio.handoff/v1`.
+
+### handoff prepare
+
+`trio handoff prepare --dataset DATASET_ID --path HANDOFF_JSON --actor ACTOR`
+
+Effect: local writes only. Validates an explicit `trio.tranche-handoff/v1` or
+provider-aware `trio.tranche-handoff/v2` envelope and records repeat-safe pending work. This optional route does not
+capture evidence or create a group. Output: `trio.handoff/v1`.
+
+### handoff run
+
+`trio handoff run --id HANDOFF_ID [--read-token-env NAME] [--request-budget 100]`
+
+Effect: GitHub reads + local writes. The budget is 1–10,000 reads for the whole
+run. Incomplete captures are retained for explicit resume; changed revisions
+refuse group creation. Completed repeats return recorded observations without
+new reads. Output: `trio.handoff/v1`; inspect `complete`, `outcome`, and `error`.
+
+### handoff show
+
+`trio handoff show --id HANDOFF_ID`
+
+Effect: local reads only. Inspects the selected input, capture coverage,
+structured references and draft group identifiers. Use `--max-bytes` for a
+larger exact record when needed. Output: `trio.handoff/v1`.

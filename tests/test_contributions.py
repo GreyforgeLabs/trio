@@ -8,6 +8,12 @@ import test_operations as fixture
 from trio_triage.contributions import ContributionService,PodmanSandbox,git_object,tree_sha,encode_files,decode_files,apply_patch,commit_bytes
 from trio_triage.operations import GitHubTransport
 from trio_triage.errors import TrioError
+from trio_triage import contracts as c
+from trio_triage.evidence import EvidenceService
+from trio_triage.search import SearchService
+from trio_triage.storage import Store,atomic_json,digest
+from trio_triage.team import TeamService
+from trio_triage.triage import TriageService
 
 PATCH=b"--- a/answer.py\n+++ b/answer.py\n@@ -1 +1 @@\n-answer = 1\n+answer = 2\n"
 class Sandbox:
@@ -117,7 +123,7 @@ class ContributionTests(unittest.TestCase):
             with self.subTest(patch=bad),self.assertRaises(TrioError):apply_patch(files,bad)
         identifier,_=self.prepared();seal=self.service.get("seals",identifier);seal["tree"]="f"*40;self.service.put("seals",identifier,seal)
         with self.assertRaises(TrioError):self.service.sealed(identifier)
-    def test_truncated_tree_and_symlink_submodule_refusal(self):
+    def test_truncated_tree_and_corrupt_symlink_submodule_refusal(self):
         for mode,kind in (("120000","blob"),("160000","commit")):
             with self.subTest(mode=mode):
                 identifier=self.service.intake(self.transport,"public/project",1)["id"]
@@ -211,3 +217,464 @@ class ContributionTests(unittest.TestCase):
         self.assertEqual(code,4)
         self.assertLessEqual(len(raw),1024)
         self.assertEqual(self.service.get("publication-journals",plan["id"])["outcome"],"uncertain")
+
+
+class FindingIntakeTests(unittest.TestCase):
+    def setUp(self):
+        ContributionTests.setUp(self)
+        self.store.config.update(installation_id="synthetic-finding-intake", roles={
+            "proposer": ["contributor"], "reviewer": ["reviewer"],
+            "other-reviewer": ["reviewer"], "maintainer": ["maintainer"]})
+        atomic_json(self.store.root / "config.json", self.store.config)
+        self.ev = EvidenceService(self.store)
+        self.scope = dict(host="github.com", repository_id=1, full_name="public/project",
+            visibility="public", observed_at="2026-09-01T00:00:00Z")
+        self.dataset = self.ev.enroll(self.scope)["dataset"]
+        self.repository = c.repository("public/project", database_id=1)
+        self.manifest = self.snapshot("2026-09-01T00:00:00Z", "Synthetic answer evidence")
+        search = SearchService(self.store)
+        search.build(self.dataset, self.manifest["snapshot_id"])
+        result = search.query(self.dataset, self.manifest["snapshot_id"], "answer", max_bytes=30000)
+        self.refs = [item["fragments"][0]["ref"] for item in result["items"]]
+        self.assertEqual(len(self.refs), 2)
+        self.items = [dict(row["identity"], repository=self.repository, revision=row["revision"])
+            for row in self.manifest["items"]]
+        self.triage = TriageService(self.store)
+        self.network = patch("socket.socket", side_effect=AssertionError("live network forbidden"))
+        self.network.start(); self.addCleanup(self.network.stop)
+
+    def snapshot(self, at, body):
+        records, payloads = [], {}
+        for number in (1, 2):
+            revision = dict(updated_at=at, base_sha=None, head_sha=None)
+            raw = c.canonical(dict(number=number, kind="issue", state="open",
+                title="Synthetic answer " + str(number), body=body,
+                html_url="https://github.com/public/project/issues/" + str(number)))
+            ref = c.artifact_ref(raw)
+            payloads[c.object_name(ref)] = raw
+            descriptor = dict(status="complete", fetched_at=at,
+                source=dict(transport="rest", resource="/synthetic/" + str(number)),
+                revision=revision, expected_count=None, received_count=None,
+                pagination_complete=None, truncated=False, error=None, object=ref)
+            records.append(dict(identity=dict(kind="issue", number=number,
+                database_id=10+number, node_id="I_synthetic_" + str(number)),
+                revision=revision, components={"summary": descriptor}))
+        manifest = c.seal_snapshot(dict(schema_version=1, artifact="evidence-snapshot",
+            repository=self.repository, started_at=at, completed_at=at,
+            requested_components=["summary"], items=records))
+        self.ev.publish(self.dataset, manifest, payloads)
+        return manifest
+
+    def finding(self, **kwargs):
+        items = kwargs.pop("items", self.items)
+        return self.triage.propose("related", items, self.refs,
+            "Synthetic investigation; no publication approval", "proposer", author_kind="agent", **kwargs)
+
+    def intake(self, finding):
+        return self.service.intake(self.transport, "public/project", finding=finding)
+
+    def imported_finding(self, change=None):
+        original = self.finding()
+        event = TeamService(self.store).export(ids=[original["event_id"]])["events"][0]
+        event = copy.deepcopy(event)
+        event["entity_id"] += "-imported"
+        if change is not None:
+            change(event)
+        payload = event["payload"]
+        payload["decision_digest"] = digest({k: v for k, v in payload.items()
+            if k not in ("decision_digest", "resolution")})
+        event["payload_digest"] = digest(payload)
+        event["event_id"] = digest({k: v for k, v in event.items() if k != "event_id"})
+        bundle = dict(schema="trio.team-bundle/v1", events=[event])
+        bundle["digest"] = digest(bundle)
+        TeamService(self.store).import_bundle_data(bundle)
+        return event
+
+    def assert_refused(self, finding, code):
+        before = self.service.list()
+        with self.assertRaises(TrioError) as error:
+            self.intake(finding)
+        self.assertEqual(error.exception.code, code)
+        self.assertEqual(self.service.list(), before)
+        self.assertFalse(any(row[0] != "GET" for row in self.http.requests))
+
+    def test_current_agent_finding_enters_queue_through_real_cli(self):
+        from trio_triage.cli import parser, run
+        finding = self.finding()
+        selected = self.triage.show(finding["entity_id"])
+        self.assertFalse(selected["stale"])
+        self.assertEqual(selected["reviews"], [])
+        command = parser()
+        args = command.parse_args(["--home", str(self.store.root), "contribution", "intake",
+            "--repository", "public/project", "--finding", finding["entity_id"],
+            "--token-env", "TRIO_TEST_TOKEN"])
+        with patch("trio_triage.operations.GitHubTransport", return_value=self.transport):
+            entry = run(args, command)
+        self.assertEqual(entry["stage"], "queued")
+        self.assertEqual(entry["intake"], dict(kind="finding", finding=finding["entity_id"],
+            finding_revision=finding["event_id"], decision_digest=finding["payload"]["decision_digest"],
+            selection_digest=digest(selected)))
+        self.assertEqual(self.service.show(entry["id"])["intake"], entry["intake"])
+        self.assertFalse((self.service.root / "approvals").exists())
+        self.assertFalse(any(row[0] != "GET" for row in self.http.requests))
+
+    def test_nonfinding_ledger_entity_cannot_be_intaken_as_a_finding(self):
+        group = self.triage.group(self.items, "proposer")
+        self.assert_refused(group["entity_id"], "INVALID_TARGET")
+
+    def test_consistent_imported_finding_remains_untrusted_queue_context(self):
+        finding = self.imported_finding()
+        shown = self.triage.show(finding["entity_id"])
+        self.assertEqual(shown["revisions"][0]["trust"], "claimed")
+        entry = self.intake(finding["entity_id"])
+        self.assertEqual(entry["stage"], "queued")
+        self.assertEqual(entry["intake"]["finding_revision"], finding["event_id"])
+        self.assertEqual(self.triage.show(finding["entity_id"])["revisions"][0]["trust"], "claimed")
+        self.assertFalse((self.service.root / "approvals").exists())
+
+    def test_imported_finding_cannot_hide_citations_or_forge_selection_digests(self):
+        for field in ("evidence_refs", "selection_digests"):
+            with self.subTest(field=field):
+                def change(event):
+                    if field == "evidence_refs":
+                        event["evidence_refs"] = []
+                        event["payload"]["evidence_refs"][0]["repository"].update(
+                            full_name="other/project", database_id=999)
+                    else:
+                        event["payload"]["selection_digests"] = ["f" * 64]
+                finding = self.imported_finding(change)
+                self.assertFalse(self.triage.show(finding["entity_id"])["stale"])
+                self.assert_refused(finding["entity_id"], "EVIDENCE_CORRUPT")
+
+    def test_conflicting_reviews_refuse_even_with_one_finding_revision(self):
+        finding = self.finding()
+        for actor, decision in (("reviewer", "approve"), ("other-reviewer", "reject")):
+            self.triage.review(finding["entity_id"], finding["payload"]["decision_digest"], decision, actor)
+        self.assertEqual(len(self.triage.show(finding["entity_id"])["revisions"]), 1)
+        self.assert_refused(finding["entity_id"], "CONFLICT")
+
+    def test_conflicting_finding_heads_refuse_until_explicitly_resolved(self):
+        first = self.finding()
+        peer = Store(self.root / "peer")
+        peer.init(dict(self.store.config, installation_id="synthetic-finding-peer"))
+        evidence = EvidenceService(peer)
+        evidence.enroll(self.scope)
+        evidence.import_cache(self.dataset, self.ev.path(self.dataset, "evidence"))
+        TeamService(peer).import_bundle_data(TeamService(self.store).export(ids=[first["event_id"]]))
+        current = self.finding(finding_id=first["entity_id"], parents=[first["event_id"]])
+        other = TriageService(peer).propose("different_cause", self.items, self.refs,
+            "Synthetic concurrent proposal", "proposer", finding_id=first["entity_id"], parents=[first["event_id"]])
+        TeamService(self.store).import_bundle_data(TeamService(peer).export(ids=[other["event_id"]]))
+        self.assert_refused(first["entity_id"], "CONFLICT")
+        resolved = TeamService(self.store).resolve(first["entity_id"],
+            [current["event_id"], other["event_id"]], "Reviewed synthetic alternatives",
+            "maintainer", selected_id=current["event_id"])
+        self.assertEqual(self.intake(first["entity_id"])["intake"]["finding_revision"], resolved["event_id"])
+
+    def test_stale_or_missing_source_cannot_start_a_finding_contribution(self):
+        finding = self.finding()
+        path = self.ev.path(self.dataset, "evidence", "objects", c.object_name(self.refs[0]["object"]))
+        raw = path.read_bytes()
+        path.unlink()
+        self.assert_refused(finding["entity_id"], "PLAN_CHANGED")
+        path.write_bytes(raw)
+        self.snapshot("2026-09-02T00:00:00Z", "Changed synthetic answer evidence")
+        self.assert_refused(finding["entity_id"], "PLAN_CHANGED")
+
+    def test_finding_items_must_match_live_repository_identity(self):
+        for changed in (dict(database_id=2), dict(database_id=None),
+                dict(full_name="other/project"), dict(host="other.invalid"),
+                dict(node_id="R_contradictory_synthetic")):
+            with self.subTest(changed=changed):
+                items = copy.deepcopy(self.items)
+                items[0]["repository"].update(changed)
+                finding = self.finding(items=items)
+                self.assert_refused(finding["entity_id"], "IDENTITY_MISMATCH")
+
+    def test_source_repository_must_match_even_when_items_claim_target_repository(self):
+        for item in self.items:
+            item["repository"] = c.repository("public/project", database_id=2)
+        other = self.finding()
+        self.http.repo["id"] = 2
+        self.assert_refused(other["entity_id"], "IDENTITY_MISMATCH")
+
+    def test_finding_review_does_not_replace_exact_publication_approval(self):
+        finding = self.finding()
+        self.triage.review(finding["entity_id"], finding["payload"]["decision_digest"], "approve", "reviewer")
+        identifier = self.intake(finding["entity_id"])["id"]
+        self.service.acquire(identifier, self.transport, self.http.base, "main")
+        self.service.patch(identifier, PATCH)
+        self.service.validate(identifier, [["python", "-c", "pass"]], IMAGE, Sandbox())
+        plan = self.service.plan(identifier, self.transport, "trio/finding", "Synthetic fix",
+            "Public reviewed body", "Synthetic Human", "human@example.invalid")
+        with self.assertRaises(TrioError):
+            self.service.publish(plan["id"], "operator", self.transport)
+        self.assertFalse(any(row[0] != "GET" for row in self.http.requests))
+        self.service.approve(plan["id"], plan["digest"], "reviewer", "publication-plans")
+        self.assertEqual(self.service.publish(plan["id"], "operator", self.transport)["outcome"], "successful")
+
+
+class SourceSymlinkTests(unittest.TestCase):
+    """Symlink handling uses synthetic Git objects and never runs source code."""
+    def setUp(self):
+        ContributionTests.setUp(self)
+
+    def source_files(self,links=None):
+        files=copy.deepcopy(self.http.files)
+        # Same public link path/bytes as Omarchy tree 8b4eae66; target is synthetic.
+        files['icon.png']={'mode':'100644','raw':b'synthetic image bytes'}
+        for name,target in (links or {'default/chromium/extensions/copy-url/icon.png':b'../../../../icon.png'}).items():
+            files[name]={'mode':'120000','raw':target}
+        for value in files.values():value['sha']=git_object('blob',value['raw'])
+        return files
+
+    def install_source(self,files):
+        self.http.files=copy.deepcopy(files);root=tree_sha(files)
+        self.http.trees[root]=copy.deepcopy(files)
+        self.http.blobs.update({v['sha']:v['raw'] for v in files.values()})
+        self.http.commits[self.http.base]['tree']['sha']=root
+        return root
+
+    def acquire(self,files):
+        root=self.install_source(files)
+        identifier=self.service.intake(self.transport,'public/project',1)['id']
+        result=self.service.acquire(identifier,self.transport,self.http.base,'main')
+        return identifier,result,root
+
+    def sandbox(self,files,directory):
+        from contextlib import nullcontext
+        directory.mkdir()
+        with patch('trio_triage.contributions.shutil.which',return_value='/synthetic/podman'),patch('trio_triage.contributions.tempfile.TemporaryDirectory',return_value=nullcontext(str(directory))),patch('trio_triage.contributions.subprocess.Popen') as process:
+            result=PodmanSandbox().run(files,[],IMAGE)
+            process.assert_not_called()
+            return result
+
+    def test_omarchy_shaped_acquisition_preserves_exact_git_identity(self):
+        files=self.source_files();link='default/chromium/extensions/copy-url/icon.png'
+        self.assertEqual(files[link]['sha'],'e088259ef984026d5dc195ae1879564e7e1a4750')
+        identifier,result,root=self.acquire(files)
+        source=self.service.source(identifier)
+        self.assertEqual(result['tree'],root)
+        self.assertEqual(result['base'],self.http.base)
+        self.assertEqual(decode_files(source['files']),files)
+        self.assertEqual(source['repository_id'],self.http.repo['id'])
+        self.assertEqual(source['files'][link]['mode'],'120000')
+        self.assertTrue(all(request[0]=='GET' for request in self.http.requests))
+        patched=self.service.patch(identifier,PATCH)
+        self.assertEqual(self.service.patched(identifier)[0]['files'][link],source['files'][link])
+        self.assertNotEqual(patched['tree'],root)
+        self.service.validate(identifier,[['synthetic-check']],IMAGE,Sandbox())
+        self.assertEqual(self.service.get('seals',identifier)['tree'],patched['tree'])
+        self.service.sealed(identifier)
+
+    def test_relative_chains_and_executable_targets_materialize_without_dereference(self):
+        files=self.source_files({'first':b'./docs/second','docs/second':b'../answer.py'})
+        files['answer.py']['mode']='100755'
+        files=dict(reversed(list(files.items())))  # Links precede their targets.
+        self.assertEqual(decode_files(encode_files(files)),files)
+        result=self.sandbox(files,self.root/'sandbox');work=self.root/'sandbox'/'work'
+        self.assertTrue(result['successful'])
+        self.assertTrue((work/'first').is_symlink())
+        self.assertEqual(os.readlink(work/'first'),'./docs/second')
+        self.assertEqual(os.readlink(work/'docs/second'),'../answer.py')
+        self.assertEqual((work/'first').read_bytes(),files['answer.py']['raw'])
+        self.assertEqual((work/'answer.py').stat().st_mode&0o777,0o755)
+
+    def test_unsafe_targets_fail_closed_before_source_record_or_host_writes(self):
+        targets=(b'/etc/passwd',b'../outside',b'../../icon.png',b'C:/outside',b'C:\\outside',b'//outside',b'icon.png\0suffix',b'icon.png\n',b'icon.png\x7f',b'\xff',b'',b'x'*1025,b'.git/config',b'.GiT/../icon.png',b'missing',b'docs',b'icon.png/../answer.py',b'missing/../icon.png',b'docs//readme.txt',b'icon.png/')
+        sentinel=self.root/'outside';sentinel.write_bytes(b'unchanged')
+        for target in targets:
+            with self.subTest(target=target):
+                files=self.source_files({'link':target})
+                with self.assertRaises(TrioError):decode_files(encode_files(files))
+                self.install_source(files);identifier=self.service.intake(self.transport,'public/project',1)['id']
+                with self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main')
+                self.assertEqual(self.service.show(identifier)['stage'],'queued')
+                self.assertFalse((self.service.root/'sources'/f'{identifier}.json').exists())
+                with patch('trio_triage.contributions.shutil.which',return_value='/synthetic/podman'),patch('trio_triage.contributions.tempfile.TemporaryDirectory') as temporary,self.assertRaises(TrioError):PodmanSandbox().run(files,[],IMAGE)
+                temporary.assert_not_called()
+                self.assertEqual(sentinel.read_bytes(),b'unchanged')
+
+    def test_cycles_directory_aliases_and_link_ancestor_collisions_are_rejected(self):
+        cases=({'link':b'link'},{'first':b'second','second':b'first'},{'alias':b'docs','link':b'alias/readme.txt'},{'alias':b'docs','link':b'alias/../icon.png'},{'link':b'icon.png','link/child':b'../answer.py'})
+        for links in cases:
+            with self.subTest(links=links),self.assertRaises(TrioError):decode_files(encode_files(self.source_files(links)))
+        links={f'link{i}':f'link{i+1}'.encode() for i in range(39)};links['link39']=b'icon.png'
+        decode_files(encode_files(self.source_files(links)))
+        links['start']=b'link0'
+        with self.assertRaises(TrioError):decode_files(encode_files(self.source_files(links)))
+
+    def test_patches_cannot_edit_delete_create_links_or_leave_dangling_targets(self):
+        files=self.source_files({'link':b'answer.py'})
+        changes=(b'--- a/link\n+++ b/link\n@@ -1 +1 @@\n-answer.py\n\\ No newline at end of file\n+icon.png\n\\ No newline at end of file\n',b'--- a/link\n+++ /dev/null\n@@ -1 +0,0 @@\n-answer.py\n\\ No newline at end of file\n',b'new file mode 120000\n--- /dev/null\n+++ b/new-link\n@@ -0,0 +1 @@\n+answer.py\n',b'--- /dev/null\n+++ b/link/child\n@@ -0,0 +1 @@\n+public\n',b'--- a/answer.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-answer = 1\n')
+        for change in changes:
+            with self.subTest(change=change),self.assertRaises(TrioError):apply_patch(files,change)
+
+    def test_link_bytes_and_modes_remain_integrity_checked(self):
+        identifier,_,_=self.acquire(self.source_files())
+        source=self.service.source(identifier);link='default/chromium/extensions/copy-url/icon.png'
+        for field,value in [('sha','f'*40),('mode','100644'),('content',base64.b64encode(b'../../../../answer.py').decode())]:
+            changed=copy.deepcopy(source);changed['files'][link][field]=value
+            from trio_triage.storage import digest
+            changed['digest']=digest({k:v for k,v in changed.items() if k!='digest'})
+            self.service.put('sources',identifier,changed)
+            with self.subTest(field=field),self.assertRaises(TrioError):self.service.source(identifier)
+        self.service.put('sources',identifier,source)
+
+    def test_host_integrity_read_never_follows_changed_links_or_directories(self):
+        files=self.source_files({'link':b'answer.py'});outside=self.root/'outside';outside.mkdir();(outside/'sentinel').write_bytes(b'unchanged')
+        original_walk=os.walk
+        for mutation in ('link','file','directory','mode','fifo'):
+            directory=self.root/('sandbox-'+mutation)
+            def altered_walk(work,**kwargs):
+                if mutation=='link':
+                    (work/'link').unlink();(work/'link').symlink_to(outside/'sentinel')
+                elif mutation=='file':
+                    (work/'answer.py').unlink();(work/'answer.py').symlink_to(outside/'sentinel')
+                elif mutation=='directory':
+                    (work/'docs'/'readme.txt').unlink();(work/'docs').rmdir();(work/'docs').symlink_to(outside,target_is_directory=True)
+                elif mutation=='mode':(work/'answer.py').chmod(0o755)
+                else:os.mkfifo(work/'unexpected')
+                return original_walk(work,**kwargs)
+            original_read=Path.read_bytes
+            def guarded_read(path):
+                self.assertTrue(path.resolve().is_relative_to(directory))
+                return original_read(path)
+            with self.subTest(mutation=mutation),patch('trio_triage.contributions.os.walk',side_effect=altered_walk),patch.object(Path,'read_bytes',guarded_read),self.assertRaises(TrioError) as error:self.sandbox(files,directory)
+            self.assertEqual(error.exception.code,'SANDBOX_SOURCE_CHANGED')
+            self.assertEqual((outside/'sentinel').read_bytes(),b'unchanged')
+
+    def test_existing_source_limits_remain_enforced(self):
+        files=self.source_files();self.install_source(files)
+        identifier=self.service.intake(self.transport,'public/project',1)['id']
+        with self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main',request_budget=3)
+        with patch('trio_triage.contributions.MAX_SOURCE',1),self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main')
+        with patch('trio_triage.contributions.MAX_BLOB',1),self.assertRaises(TrioError):self.service.acquire(identifier,self.transport,self.http.base,'main')
+
+class SourceBudgetTests(unittest.TestCase):
+    def setUp(self):
+        ContributionTests.setUp(self)
+        self.bytes=sum(len(value['raw']) for value in self.http.files.values())
+        self.identifier=self.service.intake(self.transport,'public/project',1)['id']
+
+    def acquire(self,limit=None):
+        return self.service.acquire(self.identifier,self.transport,self.http.base,'main',max_source_bytes=limit)
+
+    def test_invalid_limits_refuse_before_network_or_state_changes(self):
+        from trio_triage.contributions import MAX_SOURCE_OPT_IN,source_budget
+        self.assertEqual(MAX_SOURCE_OPT_IN,80*1024*1024)
+        for limit in (False,True,0,-1,80*1024*1024+1,1.5,'83886080',{},[]):
+            before=list(self.http.requests)
+            with self.subTest(limit=limit),self.assertRaises(TrioError) as error:self.acquire(limit)
+            self.assertEqual(error.exception.code,'INVALID_SOURCE_LIMIT')
+            self.assertEqual(self.http.requests,before)
+            self.assertEqual(self.service.show(self.identifier)['stage'],'queued')
+        self.assertEqual(source_budget(1),1)
+        self.assertEqual(source_budget(MAX_SOURCE_OPT_IN),MAX_SOURCE_OPT_IN)
+
+    def test_cli_defaults_and_catalog_require_explicit_acquire_refresh_opt_in(self):
+        from trio_triage.cli import parser,run
+        from trio_triage.catalog import catalog
+        command=parser()
+        for leaf in ('acquire','refresh'):
+            args=['--home',str(self.store.root),'contribution',leaf,'--id',self.identifier,'--base',self.http.base,'--base-branch','main','--token-env','TRIO_TEST_TOKEN']
+            default=command.parse_args(args)
+            self.assertEqual(default.max_source_bytes,64*1024*1024)
+            selected=command.parse_args([*args,'--max-source-bytes',str(80*1024*1024)])
+            self.assertEqual(selected.max_source_bytes,80*1024*1024)
+            self.assertIn('--max-source-bytes',[flag for arg in catalog(command,'contribution '+leaf)['leaves'][0]['arguments'] for flag in arg['flags']])
+            with patch('trio_triage.operations.GitHubTransport',return_value=self.transport),patch.object(ContributionService,leaf,return_value={'synthetic':True}) as action:
+                self.assertEqual(run(selected,command),{'synthetic':True})
+            self.assertEqual(action.call_args.args[-1],80*1024*1024)
+        self.acquire()
+        self.assertEqual(self.service.source(self.identifier)['max_source_bytes'],64*1024*1024)
+
+    def test_exact_raw_byte_budget_survives_patch_replay_and_validation(self):
+        result=self.acquire(self.bytes)
+        self.assertEqual(result['bytes'],self.bytes)
+        self.assertEqual(result['max_source_bytes'],self.bytes)
+        growing=PATCH.replace(b'answer = 2',b'answer = 22')
+        with self.assertRaises(TrioError):self.service.patch(self.identifier,growing)
+        self.assertEqual(self.service.show(self.identifier)['stage'],'acquired')
+        self.acquire(self.bytes+1)
+        with patch('trio_triage.contributions.MAX_SOURCE',1):
+            self.service.patch(self.identifier,growing)
+            self.service.patched(self.identifier)
+            class Exact(Sandbox):
+                def run(inner,files,commands,image,**limits):
+                    self.assertEqual(sum(len(v['raw']) for v in files.values()),self.bytes+1)
+                    return {'backend':inner.name,'image':image,'outcomes':[{'command':x,'returncode':0,'error':None} for x in commands],'successful':True}
+            self.service.validate(self.identifier,[['synthetic-check']],IMAGE,Exact())
+            self.service.sealed(self.identifier)
+        self.assertTrue(all(request[0]=='GET' for request in self.http.requests))
+
+    def test_saved_limit_is_digest_bound_and_cannot_rescue_a_replayed_patch(self):
+        from trio_triage.storage import digest
+        self.acquire(self.bytes);self.service.patch(self.identifier,PATCH)
+        original=self.service.source(self.identifier)
+        for value,rehash in ((self.bytes+1,False),(self.bytes+1,True),(None,True),(80*1024*1024+1,True)):
+            source=copy.deepcopy(original);source['max_source_bytes']=value
+            if rehash:source['digest']=digest({k:v for k,v in source.items() if k!='digest'})
+            self.service.put('sources',self.identifier,source)
+            with self.subTest(value=value,rehash=rehash),self.assertRaises(TrioError):self.service.patched(self.identifier)
+        self.service.put('sources',self.identifier,original)
+        self.service.patched(self.identifier)
+
+    def test_legacy_sources_use_default_and_refresh_needs_fresh_opt_in(self):
+        from trio_triage.storage import digest
+        self.acquire(self.bytes+1)
+        source=self.service.source(self.identifier);source.pop('max_source_bytes')
+        source['digest']=digest({k:v for k,v in source.items() if k!='digest'})
+        self.service.put('sources',self.identifier,source)
+        self.assertEqual(self.service.source(self.identifier),source)
+        with patch('trio_triage.contributions.MAX_SOURCE',self.bytes-1),self.assertRaises(TrioError):self.service.source(self.identifier)
+        self.acquire(self.bytes+1);self.service.patch(self.identifier,PATCH);self.service.validate(self.identifier,[['synthetic-check']],IMAGE,Sandbox())
+        before=self.service.source(self.identifier)
+        with patch('trio_triage.contributions.MAX_SOURCE',self.bytes-1):
+            with self.assertRaises(TrioError):self.service.refresh(self.identifier,self.transport,self.http.base,'main')
+            self.assertEqual(self.service.source(self.identifier),before)
+            result=self.service.refresh(self.identifier,self.transport,self.http.base,'main',max_source_bytes=self.bytes+1)
+        self.assertEqual(result['acquired']['max_source_bytes'],self.bytes+1)
+        self.assertTrue(result['requires_revalidation'])
+        with self.assertRaises(TrioError):self.service.sealed(self.identifier)
+
+    def test_serialized_json_overhead_and_newline_guard_is_exact_before_writing(self):
+        from trio_triage.storage import canonical
+        value={'files':{'é".txt':{'mode':'100644','sha':git_object('blob',b'ab'),'content':base64.b64encode(b'ab').decode()}},'max_source_bytes':2}
+        size=len(canonical(value))+1
+        self.assertGreater(size,len('é".txt')+len(base64.b64encode(b'ab')))
+        for kind in ('sources','patches'):
+            with self.subTest(kind=kind):
+                with patch('trio_triage.contributions.MAX_OPERATION_RECORD_BYTES',size),patch('trio_triage.operations.MAX_OPERATION_RECORD_BYTES',size):
+                    self.service.put(kind,'boundary',value)
+                    self.assertEqual(self.service.get(kind,'boundary'),value)
+                    self.assertEqual((self.service.root/kind/'boundary.json').stat().st_size,size)
+                before=(self.service.root/kind/'boundary.json').read_bytes()
+                with patch('trio_triage.contributions.MAX_OPERATION_RECORD_BYTES',size-1),self.assertRaises(TrioError) as error:self.service.put(kind,'boundary',value)
+                self.assertEqual(error.exception.code,'SOURCE_RECORD_LIMIT')
+                self.assertEqual((self.service.root/kind/'boundary.json').read_bytes(),before)
+                with patch('trio_triage.contributions.MAX_OPERATION_RECORD_BYTES',size-1),self.assertRaises(TrioError):self.service.put(kind,'new-boundary',value)
+                self.assertFalse((self.service.root/kind/'new-boundary.json').exists())
+
+    def test_eighty_mib_exact_boundary_and_real_base64_record_round_trip(self):
+        from trio_triage.contributions import MAX_SOURCE,MAX_SOURCE_OPT_IN,MAX_BLOB,MAX_OPERATION_RECORD_BYTES
+        from trio_triage.storage import canonical
+        self.assertEqual((MAX_SOURCE,MAX_SOURCE_OPT_IN,MAX_BLOB,MAX_OPERATION_RECORD_BYTES),(64*1024*1024,80*1024*1024,16*1024*1024,128*1024*1024))
+        raw=b'x'*MAX_BLOB;content=base64.b64encode(raw).decode();blob=git_object('blob',raw)
+        encoded={f'file-{i}.bin':{'mode':'100644','sha':blob,'content':content} for i in range(5)}
+        with self.assertRaises(TrioError):decode_files(encoded)
+        decoded=decode_files(encoded,max_source_bytes=MAX_SOURCE_OPT_IN)
+        self.assertEqual(sum(len(v['raw']) for v in decoded.values()),MAX_SOURCE_OPT_IN)
+        del decoded
+        over={**encoded,'one-byte':{'mode':'100644','sha':git_object('blob',b'x'),'content':'eA=='}}
+        with self.assertRaises(TrioError):decode_files(over,max_source_bytes=MAX_SOURCE_OPT_IN)
+        value={'files':encoded,'max_source_bytes':MAX_SOURCE_OPT_IN}
+        encoded_bytes=5*(4*((MAX_BLOB+2)//3))
+        size=len(canonical(value))+1
+        self.assertEqual(encoded_bytes,5*len(content))
+        self.assertGreater(size,encoded_bytes)
+        self.assertLess(size,MAX_OPERATION_RECORD_BYTES)
+        self.service.put('sources','maximum-source-fixture',value)
+        path=self.service.root/'sources'/'maximum-source-fixture.json'
+        self.assertEqual(path.stat().st_size,size)
+        self.assertEqual(self.service.get('sources','maximum-source-fixture'),value)

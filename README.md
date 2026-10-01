@@ -40,7 +40,9 @@ for exact source versions, adaptations, and the additional Vyral attribution.
   capture, search, findings, review, groups, bundles, and evidence packets.
 - **Looking for a feature:** [Feature guide](docs/FEATURES.md) explains every
   feature area. [Command reference](docs/COMMAND_REFERENCE.md) lists all
-  62 commands, their arguments, defaults, and effects.
+  66 commands, their arguments, defaults, and effects.
+- **Tranche reviewer:** [Tranche handoff](docs/TRANCHE_WORKFLOW.md) connects a
+  separately installed Tranche report to revision-bound evidence and draft groups.
 
 ## What you can do today
 

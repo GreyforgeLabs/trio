@@ -16,7 +16,7 @@ step-by-step instructions.
 | Inventory comparisons | Changes between snapshots, with partial coverage kept explicit | `inventory drift` | [Inventory](OPERATIONS_GUIDE.md#inventory) |
 | Repository maintenance | Nine explicitly selected GitHub operations | `ops policy`, `plan`, `inspect`, `approve`, `execute` | [Maintenance](OPERATIONS_GUIDE.md#maintenance) |
 | Maintenance recovery | Durable dispatch records and read reconciliation | `ops inspect`, `reconcile` | [Recovery](RECOVERY.md) |
-| Contribution intake | Real public issue intake; local finding intake has a compatibility limit | `contribution intake`, `list`, `show` | [Contributions](CONTRIBUTIONS.md) |
+| Contribution intake | Public issue or exact local finding revision, checked for conflicts, source staleness and repository identity | `contribution intake`, `list`, `show` | [Contributions](CONTRIBUTIONS.md) |
 | Verified contribution source | Exact commit/tree/blob acquisition and bounded object reads | `contribution acquire` | [Contributions](CONTRIBUTIONS.md#prepare-and-validate) |
 | Patch preparation | Contained text patches against the acquired source | `contribution patch` | [Contributions](CONTRIBUTIONS.md#prepare-and-validate) |
 | Sandbox validation | Explicit commands in an offline Podman container; host-created seal | `contribution validate` | [Contributions](CONTRIBUTIONS.md#prepare-and-validate) |
@@ -72,13 +72,16 @@ does not authorize a GitHub write. See [evidence and teams](USER_GUIDE.md).
   branch deletion, or release creation/upload command is provided.
 - Team bundles are not cryptographically signed. Local role configuration
   is cooperative and does not authenticate a person who controls the files.
-- Source symlinks, submodules, LFS pointers, unsupported entries, and unsafe
-  paths cannot be sealed as contribution source. Patching supports constrained
-  text changes, not arbitrary Git operations or binary patches.
+- Relative source symlinks ending at tracked in-tree regular files are preserved.
+  Unsafe, dangling, cyclic, directory-target, and overlong links, submodules,
+  LFS pointers, unsupported entries, and unsafe paths cannot be sealed.
+  Patching supports constrained regular-file text changes and preserves existing
+  links; it cannot create, edit, or delete links or leave their targets dangling.
 - Sandbox commands must work with a preinstalled digest-pinned image and no
   network. Trio does not install the project's dependencies during validation.
-- Local-finding contribution intake has a current ledger compatibility mismatch
-  and can return `CONFLICT`; use real issue intake while it remains unresolved.
+- Local-finding contribution intake requires non-conflicting, non-stale evidence
+  for the selected repository; resolve conflicts or update the evidence before
+  retrying. Intake grants no publication authority.
 - Live maintenance and contribution write qualification remains `NOT_RUN`.
   Actual sandbox and production read checks are separate release observations.
 - Index deletion is supported; automatic pruning of authoritative evidence

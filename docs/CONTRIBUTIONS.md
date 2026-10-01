@@ -3,16 +3,22 @@
 [Documentation home](../README.md) · [Getting started](GETTING_STARTED.md) ·
 [Command reference](COMMAND_REFERENCE.md)
 
-The `contribution` command family takes a public issue through source
+The `contribution` command family takes a public issue or local finding through source
 acquisition, patch validation, exact publication approval and pull request
-publication. The local-finding intake option currently has a ledger
-compatibility mismatch; see [known limits](#limitations-to-inspect-before-choosing-this-workflow). `trio commands --json` provides the versioned machine
+publication. `trio commands --json` provides the versioned machine
 catalog. There is no built-in model or automatic agent launcher; a person or
 separately chosen tool supplies the patch and proposed PR text.
 
 ## Prepare and validate
 
 Use issue intake to select a public GitHub repository and issue.
+Alternatively, use `--finding FINDING_ID` instead of `--issue` to queue one
+non-stale, non-conflicting finding from the local ledger. All finding items and
+cited sources must match the selected public repository's stable identity.
+Intake records the exact finding revision, decision digest and selection digest.
+Finding freshness refers to recorded evidence, not a new live check of its items.
+An agent proposal may enter the queue without a review; neither the proposal nor
+a finding review grants a validation seal or publication approval.
 Acquire resolves a precise base commit and obtains a complete public source tree.
 Acquire and refresh have an explicit `--request-budget` (default 1000) covering
 bounded Git object reads; an exhausted budget cannot produce a valid source seal.
@@ -211,13 +217,48 @@ unrelated branch to make a plan pass.
 
 ## Limitations to inspect before choosing this workflow
 
-The current source acquisition refuses symlinks, submodules, LFS pointers,
-truncated trees, and unsupported entries. Patch import refuses binary patches,
-unsafe paths, renames, and unsupported mode changes. These are explicit source
-format limits, not claims about the quality of an upstream project.
+Source acquisition preserves regular files, executable files, and relative
+symlinks whose complete chain ends at a tracked regular file within the source
+tree. Link paths, target bytes, modes, and Git object identities are retained;
+targets are not downloaded or copied through the link. Links are checked before
+any sandbox files are written and created only after regular files. Host
+integrity checks read link bytes without following them.
 
-`--finding` is exposed for local finding intake. The current bridge expects
-an older finding detail shape and can refuse a finding from the current ledger
-with `CONFLICT`; use real issue intake until that compatibility is corrected.
+Absolute, escaping, dangling, cyclic, overlong, and directory-target links are
+refused, including paths that traverse a link ancestor. Chains may contain at
+most 40 links. Submodules, LFS pointers, truncated trees, and unsupported entries
+remain unsupported. Patch import cannot create, edit, or delete symlinks, leave
+their targets dangling, or write beneath a link; edits to a tracked regular
+target are allowed. Binary patches, unsafe paths, renames, and unsupported mode
+changes remain refused. These are explicit source format limits, not claims
+about the quality of an upstream project.
+
+Acquisition allows at most 5,000 files and 16 MiB per blob. The total raw-source
+budget defaults to 64 MiB (67,108,864 bytes). For an explicitly selected larger
+source, `acquire --max-source-bytes 83886080` opts into the hard maximum of
+80 MiB; smaller positive integer budgets are also accepted. This option does
+not change the file, per-blob, symlink, credential-screening, or request limits.
+
+The chosen byte budget is part of the immutable source digest and is enforced
+again during patch import, replay, and validation. Existing records without a
+budget use the 64 MiB default. Every `refresh` defaults to 64 MiB again; repeat
+the explicit option when the new source needs a larger budget. Refresh still
+requires new validation and approval.
+
+Each serialized source or patch record must also fit the existing 128 MiB
+record-reader bound. The writer checks the exact JSON bytes, including base64
+content, path/metadata overhead, and the final newline, before replacing a
+record. Even a raw source within its selected budget is refused if its full
+record cannot fit. A larger byte budget is not a sandbox or publication grant.
+
+The request budget defaults to 1,000 (maximum 10,000). Requests account for
+three metadata reads plus one per file, including symlinks. Increasing
+`--request-budget` does not implicitly raise the source-byte budget.
+
+Finding intake refuses conflicting revisions or reviews (`CONFLICT`), changed
+or unavailable cited evidence (`PLAN_CHANGED`), and repository identity mismatches
+(`IDENTITY_MISMATCH`). Resolve conflicts or update the proposal's evidence before
+retrying. Imported findings with inconsistent citation copies or selection digests
+refuse as `EVIDENCE_CORRUPT`; consistent imported attribution remains unverified.
 Do not substitute an invented issue number. Live maintenance/contribution writes
 remain unqualified in a live trial; release sandbox/read verification is separate.
