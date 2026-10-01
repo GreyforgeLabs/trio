@@ -4,7 +4,7 @@
 All tracked bytes are immutable local records. Sandbox output is diagnostic data,
 never a seal or authority. Publication is closed until exact local policy/approval.
 """
-import base64,datetime,hashlib,os,re,selectors,shutil,subprocess,tempfile,time,uuid
+import base64,datetime,hashlib,os,re,selectors,shutil,stat,subprocess,tempfile,time,uuid
 from pathlib import Path
 from .operations import OperationState,repo_name,sha,integer,now,GitHubTransport
 from .storage import canonical,digest,atomic_json,read_json,confined
@@ -22,12 +22,13 @@ def decode_files(files):
     result={};total=0
     for name,value in files.items():
         path_name(name)
-        if not isinstance(value,dict) or set(value)!={"mode","sha","content"} or value["mode"] not in {"100644","100755"}:raise TrioError("SOURCE_CORRUPT")
+        if not isinstance(value,dict) or set(value)!={"mode","sha","content"} or value["mode"] not in {"100644","100755","120000"}:raise TrioError("SOURCE_CORRUPT")
         try:raw=base64.b64decode(value["content"],validate=True)
         except Exception:raise TrioError("SOURCE_CORRUPT") from None
         total+=len(raw)
         if len(raw)>MAX_BLOB or total>MAX_SOURCE or git_object("blob",raw)!=value["sha"]:raise TrioError("SOURCE_CORRUPT")
         result[name]={"mode":value["mode"],"raw":raw,"sha":value["sha"]}
+    validate_source_links(result)
     return result
 
 def encode_files(files):return {k:{"mode":v["mode"],"sha":git_object("blob",v["raw"]),"content":base64.b64encode(v["raw"]).decode()} for k,v in files.items()}
@@ -47,6 +48,40 @@ def tree_sha(files):
             rows.append((name.encode()+ (b"/" if directory else b""),mode.encode()+b" "+name.encode()+b"\0"+bytes.fromhex(oid)))
         return git_object("tree",b"".join(raw for _,raw in sorted(rows)))
     return build(tree)
+
+def validate_source_links(files):
+    """Validate links against Git objects, without consulting the host filesystem.
+
+    Only relative links ending at tracked regular files are supported. Directory
+    links are deliberately excluded, so no materialization or read traverses a
+    link ancestor. Check the complete graph before creating any filesystem entry.
+    """
+    tree_sha(files)  # Reject file/directory collisions, including link ancestors.
+    directories={"/".join(name.split("/")[:i]) for name in files for i in range(1,len(name.split("/")))}
+    targets={}
+    for name,value in files.items():
+        if value["mode"]!="120000":continue
+        raw=value["raw"]
+        try:target=raw.decode("utf-8")
+        except UnicodeError:raise TrioError("UNSAFE_SOURCE_LINK") from None
+        if not target or len(raw)>1024 or target.startswith("/") or "\\" in target or re.match(r"^[A-Za-z]:",target) or any(ord(c)<32 or ord(c)==127 for c in target):raise TrioError("UNSAFE_SOURCE_LINK")
+        parts=name.split("/")[:-1];components=target.split("/")
+        for i,component in enumerate(components):
+            if not component or component.lower()==".git":raise TrioError("UNSAFE_SOURCE_LINK")
+            if component=="..":
+                if not parts:raise TrioError("UNSAFE_SOURCE_LINK")
+                parts.pop()
+            elif component!=".":parts.append(component)
+            # Do not normalize through a missing/file/link path component.
+            if i<len(components)-1 and parts and "/".join(parts) not in directories:raise TrioError("UNSAFE_SOURCE_LINK")
+        target="/".join(parts)
+        if target not in files:raise TrioError("UNSAFE_SOURCE_LINK")
+        targets[name]=target
+    for name in targets:
+        current=name;seen=set()
+        while current in targets:
+            if current in seen or len(seen)>=40:raise TrioError("UNSAFE_SOURCE_LINK")
+            seen.add(current);current=targets[current]
 
 def screen_files(files):
     from .team import screen
@@ -72,6 +107,7 @@ def apply_patch(files,patch):
         if old is None and new is None or old and new and old!=new:raise TrioError("PATCH_REFUSED",exit_code=2)
         target=new or old
         if target in touched or old and old not in result or old is None and new in result:raise TrioError("PATCH_REFUSED",exit_code=2)
+        if old and result[old]["mode"]=="120000":raise TrioError("PATCH_REFUSED",exit_code=2)
         touched.add(target)
         raw=result[old]["raw"] if old else b""
         try:source=raw.decode("utf-8").splitlines(keepends=True)
@@ -115,11 +151,17 @@ class PodmanSandbox:
         executable=shutil.which("podman")
         if not executable:raise TrioError("SANDBOX_UNAVAILABLE","Install Podman and preload the explicitly approved image digest",exit_code=2)
         outcomes=[]
+        validate_source_links(files)
+        expected=tree_sha(files)
         with tempfile.TemporaryDirectory(prefix="trio-validation-") as directory:
             work=Path(directory)/"work";work.mkdir(mode=0o700)
             for name,value in files.items():
+                if value["mode"]=="120000":continue
                 destination=work/path_name(name);destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(value["raw"]);destination.chmod(0o755 if value["mode"]=="100755" else 0o644)
-            expected=tree_sha(files)
+            # Links are created last, after all regular-file writes and chmods.
+            for name,value in files.items():
+                if value["mode"]!="120000":continue
+                destination=work/path_name(name);destination.parent.mkdir(parents=True,exist_ok=True);destination.symlink_to(value["raw"].decode("utf-8"))
             for argv in commands:
                 container="trio-validation-"+uuid.uuid4().hex
                 invocation=[executable,"run","--rm","--pull=never","--name",container,"--network=none","--read-only","--cap-drop=ALL","--security-opt=no-new-privileges","--pids-limit="+str(pids),"--memory="+str(memory_mb)+"m","--cpus="+str(cpus),"--userns=keep-id","--user="+str(os.getuid())+":"+str(os.getgid()),"--log-driver=none","--env=HOME=/tmp","--env=PYTHONDONTWRITEBYTECODE=1","--tmpfs=/tmp:rw,nosuid,nodev,size=128m","--mount=type=bind,src="+str(work)+",dst=/work,ro=true","--workdir=/work",image,*argv]
@@ -150,10 +192,14 @@ class PodmanSandbox:
                 if failure or code!=0:break
             # A trusted host read checks immutable tracked inputs after execution.
             observed={}
-            for path in work.rglob("*"):
-                if path.is_symlink():raise TrioError("SANDBOX_SOURCE_CHANGED")
-                if path.is_file():
-                    name=path.relative_to(work).as_posix();raw=path.read_bytes();observed[name]={"mode":files[name]["mode"] if name in files else "100644","raw":raw,"sha":git_object("blob",raw)}
+            for root,directories,names in os.walk(work,followlinks=False):
+                for name in [*directories,*names]:
+                    path=Path(root)/name;mode=path.lstat().st_mode
+                    if stat.S_ISLNK(mode):raw=os.readlink(os.fsencode(path));git_mode="120000"
+                    elif stat.S_ISREG(mode):raw=path.read_bytes();git_mode="100755" if mode&0o111 else "100644"
+                    elif stat.S_ISDIR(mode):continue
+                    else:raise TrioError("SANDBOX_SOURCE_CHANGED")
+                    observed[path.relative_to(work).as_posix()]={"mode":git_mode,"raw":raw,"sha":git_object("blob",raw)}
             if tree_sha(observed)!=expected:raise TrioError("SANDBOX_SOURCE_CHANGED")
         return {"backend":self.name,"image":image,"outcomes":outcomes,"successful":len(outcomes)==len(commands) and all(x["returncode"]==0 and not x["error"] for x in outcomes)}
 
@@ -221,7 +267,7 @@ class ContributionService(OperationState):
             for item in tree["tree"]:
                 name=path_name(item.get("path"));mode=item.get("mode");kind=item.get("type")
                 if kind=="tree" and mode=="040000":continue
-                if kind!="blob" or mode not in {"100644","100755"} or name in files:raise TrioError("UNSUPPORTED_SOURCE_ENTRY")
+                if kind!="blob" or mode not in {"100644","100755","120000"} or name in files:raise TrioError("UNSUPPORTED_SOURCE_ENTRY")
                 if type(item.get("size")) is not int or not 0<=item["size"]<=MAX_BLOB:raise TrioError("SOURCE_INCOMPLETE")
                 if requests>=request_budget:raise TrioError("SOURCE_REQUEST_BUDGET")
                 requests+=1
@@ -236,6 +282,7 @@ class ContributionService(OperationState):
                 screen_files({name:{"raw":raw}})
                 files[name]={"mode":mode,"raw":raw,"sha":item["sha"]}
             if tree_sha(files)!=root:raise TrioError("SOURCE_CORRUPT")
+            validate_source_links(files)
             encoded=encode_files(files);source={"schema":"trio.public-source/v1","repository":entry["repository"],"repository_id":repo["id"],"base":base,"branch":branch,"tree":root,"files":encoded,"observed_at":now()};source["digest"]=digest(source)
             self.put("sources",identifier,source)
             entry.update(stage="acquired",generation=entry["generation"]+1,source_digest=source["digest"],seal=None,plan=None);self.put("contributions",identifier,entry)

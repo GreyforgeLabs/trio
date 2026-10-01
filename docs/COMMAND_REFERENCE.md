@@ -889,6 +889,11 @@ Inspect help: `trio contribution show --help`.
 
 Acquire verified public Git objects for an exact base SHA/branch under a request budget.
 
+Preserves regular/executable files and relative symlinks ending at tracked
+in-tree regular files. Unsafe, dangling, cyclic, directory-target, and overlong
+links are refused. Caps remain 5,000 files, 16 MiB per blob, and 64 MiB total;
+the request budget covers three metadata reads plus one read per file.
+
 Declared effect: `read-github+write-local`. Network: `github-read`.
 Output schema: `trio.contribution-acquire/v1`. Explicit authorization declared: no.
 
@@ -905,6 +910,10 @@ Inspect help: `trio contribution acquire --help`.
 ## contribution patch
 
 Apply a reviewed constrained unified text patch to acquired source.
+
+Only regular-file text changes are supported. Existing symlinks are preserved;
+creating, editing, or deleting a link, writing beneath one, or leaving a link
+target dangling is refused.
 
 Declared effect: `write-local`. Network: `none`.
 Output schema: `trio.contribution-patch/v1`. Explicit authorization declared: no.
